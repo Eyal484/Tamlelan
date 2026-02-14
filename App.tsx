@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { AppState, TranscriptionResult } from './types';
+import { AppState, TranscriptionResult, HistoryEntry } from './types';
 import { transcribeAudio } from './services/gemini';
 
 const App: React.FC = () => {
@@ -8,11 +8,40 @@ const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<TranscriptionResult | null>(null);
   const [timer, setTimer] = useState(0);
-  
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [viewingEntry, setViewingEntry] = useState<HistoryEntry | null>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   // Fix: Using number instead of NodeJS.Timeout for browser-based React application
   const intervalRef = useRef<number | null>(null);
+
+  // Load history from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('calltranscribe_history');
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch {}
+    }
+  }, []);
+
+  // Helper to format timestamp for display
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('he-IL') + ' ' + d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Delete history entry
+  const deleteEntry = (id: string) => {
+    setHistory(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+      return updated;
+    });
+    if (viewingEntry?.id === id) setViewingEntry(null);
+  };
 
   // Helper to convert Blob to Base64
   const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -80,17 +109,33 @@ const App: React.FC = () => {
       recorder.onstop = async () => {
         setStatus(AppState.PROCESSING);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
+
         try {
           const base64 = await blobToBase64(audioBlob);
           const transcription = await transcribeAudio(base64, 'audio/webm');
-          
+
           setResult({
             text: transcription.text,
             summary: transcription.summary,
             language: 'he',
             timestamp: new Date().toLocaleTimeString()
           });
+
+          // Save to history
+          const newEntry: HistoryEntry = {
+            id: crypto.randomUUID(),
+            text: transcription.text,
+            summary: transcription.summary || '',
+            language: 'he',
+            timestamp: new Date().toISOString(),
+            duration: timer
+          };
+          setHistory(prev => {
+            const updated = [newEntry, ...prev];
+            localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+            return updated;
+          });
+
           setStatus(AppState.RESULT);
         } catch (err: any) {
           setErrorMessage(err.message || "שגיאה בתמלול");
@@ -138,15 +183,132 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 bg-gray-50">
-      <header className="mb-10 text-center">
-        <h1 className="text-4xl font-bold text-indigo-700 mb-2">CallTranscribe Pro</h1>
-        <p className="text-gray-600">הפוך שיחות לטקסט וסיכומים בקליק</p>
+      <header className="mb-10 w-full max-w-2xl flex justify-between items-center">
+        <div className="text-center flex-1">
+          <h1 className="text-4xl font-bold text-indigo-700 mb-2">CallTranscribe Pro</h1>
+          <p className="text-gray-600">הפוך שיחות לטקסט וסיכומים בקליק</p>
+        </div>
+        <button
+          onClick={() => {
+            setShowHistory(!showHistory);
+            setViewingEntry(null);
+          }}
+          className="absolute right-8 top-8 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold text-gray-800 transition-colors flex items-center gap-2"
+        >
+          📋 {history.length}
+        </button>
       </header>
 
       <main className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8 transition-all">
-        
+
+        {/* History Panel */}
+        {showHistory && !viewingEntry && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center border-b pb-4">
+              <h2 className="text-2xl font-bold text-gray-800">הקלטות קודמות</h2>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="text-sm text-indigo-600 hover:text-indigo-800 font-semibold"
+              >
+                חזור
+              </button>
+            </div>
+
+            {history.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-lg">אין הקלטות שמורות</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+                {history.map(entry => (
+                  <div
+                    key={entry.id}
+                    onClick={() => setViewingEntry(entry)}
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1 text-right">
+                        <p className="font-semibold text-gray-800 line-clamp-2">
+                          {entry.summary.substring(0, 80)}
+                          {entry.summary.length > 80 ? '...' : ''}
+                        </p>
+                        <p className="text-sm text-gray-500 mt-1">{formatDate(entry.timestamp)}</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {Math.floor(entry.duration / 60).toString().padStart(2, '0')}:{(entry.duration % 60).toString().padStart(2, '0')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteEntry(entry.id);
+                        }}
+                        className="p-2 hover:bg-red-50 rounded text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Entry Detail View */}
+        {viewingEntry && (
+          <div className="w-full space-y-6">
+            <div className="flex justify-between items-center border-b pb-4">
+              <h2 className="text-2xl font-bold text-gray-800">פרטי הקלטה</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => deleteEntry(viewingEntry.id)}
+                  className="px-3 py-2 text-red-500 hover:text-red-700 font-bold transition-colors"
+                >
+                  🗑 מחק
+                </button>
+                <button
+                  onClick={() => setViewingEntry(null)}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 font-semibold"
+                >
+                  חזור
+                </button>
+              </div>
+            </div>
+
+            <section className="space-y-2">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">סיכום המפגש</h3>
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-900 leading-relaxed">
+                {viewingEntry.summary}
+              </div>
+            </section>
+
+            <section className="space-y-2">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">תמלול מלא</h3>
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar">
+                {viewingEntry.text}
+              </div>
+            </section>
+
+            <div className="flex gap-4 pt-4">
+              <button
+                onClick={() => navigator.clipboard.writeText(`${viewingEntry.summary}\n\n${viewingEntry.text}`)}
+                className="flex-1 py-3 px-4 bg-gray-800 hover:bg-black text-white rounded-lg font-bold transition-colors"
+              >
+                העתק הכל
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-3 px-4 border border-gray-300 hover:bg-gray-100 rounded-lg font-bold transition-colors"
+              >
+                הדפס / שמור כ-PDF
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Status Display */}
-        <div className="flex flex-col items-center justify-center space-y-6">
+        {!showHistory && !viewingEntry && (
+          <div className="flex flex-col items-center justify-center space-y-6">
           
           {status === AppState.IDLE && (
             <div className="text-center space-y-6">
@@ -256,6 +418,7 @@ const App: React.FC = () => {
           )}
 
         </div>
+        )}
       </main>
 
       <footer className="mt-8 text-gray-400 text-xs">

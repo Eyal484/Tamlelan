@@ -6,6 +6,15 @@ export interface TranscriptionResult {
   timestamp: string;
 }
 
+export interface HistoryEntry {
+  id: string;
+  text: string;
+  summary: string;
+  language: string;
+  timestamp: string;
+  duration: number;
+}
+
 export enum AppState {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',
