@@ -1,0 +1,7 @@
+{
+  "name": "CallTranscribe Pro",
+  "description": "A professional tool for recording and transcribing calls. Features high-quality audio capture and advanced Gemini-powered transcription.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
