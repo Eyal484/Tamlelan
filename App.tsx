@@ -323,31 +323,55 @@ const App: React.FC = () => {
               </section>
             )}
 
+            {/* Key Points Card */}
+            {viewingEntry.keyPoints && viewingEntry.keyPoints.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">נקודות חזוקות ({viewingEntry.keyPoints.length})</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {viewingEntry.keyPoints.map((kp, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
+                      onMouseLeave={() => setActiveQuote(null)}
+                      className={`group p-4 rounded-xl border transition-all duration-200 text-right cursor-pointer ${
+                        activeQuote === kp.quote
+                          ? 'bg-gradient-to-br from-cyan-500/40 to-blue-500/40 border-cyan-400/60 shadow-lg shadow-cyan-500/30'
+                          : 'bg-slate-700/20 border-slate-600/30 hover:bg-slate-700/40 hover:border-cyan-500/40'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 justify-end">
+                        <div className="flex-1">
+                          <p className={`font-semibold transition-colors ${
+                            activeQuote === kp.quote ? 'text-cyan-100' : 'text-slate-100 group-hover:text-cyan-200'
+                          }`}>
+                            {kp.label}
+                          </p>
+                          <p className={`text-xs mt-2 transition-colors ${
+                            activeQuote === kp.quote ? 'text-cyan-200/80' : 'text-slate-400 group-hover:text-slate-300'
+                          }`}>
+                            "{kp.quote}"
+                          </p>
+                        </div>
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                          activeQuote === kp.quote
+                            ? 'bg-cyan-500 text-slate-900'
+                            : 'bg-slate-600/50 text-slate-300 group-hover:bg-cyan-500/30'
+                        }`}>
+                          {idx + 1}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
               <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
                 {viewingEntry.summary}
-
-                {/* Key Points in Summary */}
-                {viewingEntry.keyPoints && viewingEntry.keyPoints.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-cyan-500/30 flex flex-wrap gap-2">
-                    {viewingEntry.keyPoints.map((kp, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
-                        onMouseLeave={() => setActiveQuote(null)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          activeQuote === kp.quote
-                            ? 'bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/50'
-                            : 'bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30'
-                        }`}
-                        title={kp.label}
-                      >
-                        {kp.label.substring(0, 40)}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </section>
 
@@ -466,31 +490,55 @@ const App: React.FC = () => {
                 </section>
               )}
 
+              {/* Key Points Card */}
+              {result.keyPoints && result.keyPoints.length > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">נקודות חזוקות ({result.keyPoints.length})</h3>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                    {result.keyPoints.map((kp, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
+                        onMouseLeave={() => setActiveQuote(null)}
+                        className={`group p-4 rounded-xl border transition-all duration-200 text-right cursor-pointer ${
+                          activeQuote === kp.quote
+                            ? 'bg-gradient-to-br from-cyan-500/40 to-blue-500/40 border-cyan-400/60 shadow-lg shadow-cyan-500/30'
+                            : 'bg-slate-700/20 border-slate-600/30 hover:bg-slate-700/40 hover:border-cyan-500/40'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 justify-end">
+                          <div className="flex-1">
+                            <p className={`font-semibold transition-colors ${
+                              activeQuote === kp.quote ? 'text-cyan-100' : 'text-slate-100 group-hover:text-cyan-200'
+                            }`}>
+                              {kp.label}
+                            </p>
+                            <p className={`text-xs mt-2 transition-colors ${
+                              activeQuote === kp.quote ? 'text-cyan-200/80' : 'text-slate-400 group-hover:text-slate-300'
+                            }`}>
+                              "{kp.quote}"
+                            </p>
+                          </div>
+                          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                            activeQuote === kp.quote
+                              ? 'bg-cyan-500 text-slate-900'
+                              : 'bg-slate-600/50 text-slate-300 group-hover:bg-cyan-500/30'
+                          }`}>
+                            {idx + 1}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <section className="space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
                 <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
                   {result.summary}
-
-                  {/* Key Points in Summary */}
-                  {result.keyPoints && result.keyPoints.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-cyan-500/30 flex flex-wrap gap-2">
-                      {result.keyPoints.map((kp, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
-                          onMouseLeave={() => setActiveQuote(null)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            activeQuote === kp.quote
-                              ? 'bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/50'
-                              : 'bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30'
-                          }`}
-                          title={kp.label}
-                        >
-                          {kp.label.substring(0, 40)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </section>
 
