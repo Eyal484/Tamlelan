@@ -61,44 +61,16 @@ const App: React.FC = () => {
     try {
       setErrorMessage(null);
       audioChunksRef.current = [];
-      
-      // We try to capture both Mic and System Audio.
-      // Note: "System Audio" capture via getDisplayMedia is OS/Browser dependent.
-      // On Chrome/Windows, the user can select a tab or screen and check "Share audio".
-      
-      let combinedStream: MediaStream;
-      
-      try {
-        // Request Display Media for "System Audio" (the other side of the call)
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { width: 1, height: 1 }, // Required for some browsers
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        } as any);
 
-        // Request Microphone
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
 
-        // Merge them using AudioContext
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const dest = audioCtx.createMediaStreamDestination();
-        
-        const source1 = audioCtx.createMediaStreamSource(displayStream);
-        const source2 = audioCtx.createMediaStreamSource(micStream);
-        
-        source1.connect(dest);
-        source2.connect(dest);
-        
-        combinedStream = dest.stream;
-      } catch (e) {
-        console.warn("Could not capture system audio, falling back to microphone only.", e);
-        combinedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
-
-      const recorder = new MediaRecorder(combinedStream);
+      const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
@@ -445,8 +417,8 @@ const App: React.FC = () => {
                 <p className="font-bold mb-3 text-white">הנחיות להקלטת שיחה:</p>
                 <ul className="list-disc list-inside text-right space-y-2">
                   <li>לחץ על כפתור ההקלטה</li>
-                  <li>בחר את המסך/טאב בו מתבצעת השיחה</li>
-                  <li>סמן <strong>"שתף שמע של המערכת"</strong> להקלטת שני הצדדים</li>
+                  <li>אשר גישה למיקרופון</li>
+                  <li>התחל לדבר - ההקלטה תתחיל באופן אוטומטי</li>
                 </ul>
               </div>
               <button
