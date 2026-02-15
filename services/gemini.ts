@@ -9,11 +9,22 @@ const TAGS_META = [
   { id: 'performance_issue',  label: 'בעיות בביצועים' },
 ];
 
-export const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<{ text: string; summary: string; tags: ConversationTag[]; keyPoints: KeyPoint[] }> => {
-  // Fix: Directly use process.env.API_KEY in the initialization as per SDK guidelines
+// Helper to convert Blob to Base64
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = (reader.result as string).split(',')[1];
+      resolve(base64String);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+export const transcribeAudioGemini = async (blob: Blob, mimeType: string): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  // Step 1: Transcribe audio with extreme focus on accuracy
   const transcriptionPrompt = `אתה מהנדס תמלול מקצועי. המשימה היחידה שלך היא לתמלל את השיחה בדיוק מוחלט.
 
 הנחיות קריטיות:
@@ -31,11 +42,55 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string): Pr
   "text": "התמלול המלא כאן..."
 }`;
 
-  // Step 2: Summarize the transcribed text with tag detection and key points
-  const summaryPrompt = (transcribedText: string) => `אתה עוזר מקצועי לניתוח שיחות מכירות עבור דרושים IL (אתר מודעות עבודה בישראל). על בסיס התמלול שלהלן, ספק סיכום מדויק, זהה אירועי שיחה וחלץ נקודות חשובות.
+  try {
+    const base64Audio = await blobToBase64(blob);
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          parts: [
+            { text: transcriptionPrompt },
+            {
+              inlineData: {
+                data: base64Audio,
+                mimeType: mimeType
+              }
+            }
+          ]
+        }
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            text: { type: Type.STRING }
+          },
+          required: ["text"]
+        }
+      }
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    return result.text || "לא ניתן היה להפיק תמלול.";
+  } catch (error) {
+    console.error("Transcription error:", error);
+    throw new Error("נכשלה פעולת התמלול. וודא שקובץ האודיו תקין.");
+  }
+};
+
+export const analyzeTranscription = async (text: string): Promise<{
+  summary: string;
+  tags: ConversationTag[];
+  keyPoints: KeyPoint[];
+}> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const summaryPrompt = `אתה עוזר מקצועי לניתוח שיחות מכירות עבור דרושים IL (אתר מודעות עבודה בישראל). על בסיס התמלול שלהלן, ספק סיכום מדויק, זהה אירועי שיחה וחלץ נקודות חשובות.
 
 התמלול:
-${transcribedText}
+${text}
 
 סיכום יוקד על:
 - שמות הלקוח והמוכר (מהתמלול)
@@ -68,44 +123,12 @@ ${transcribedText}
 }`;
 
   try {
-    // Step 1: Transcribe
-    const transcriptionResponse = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
         {
           parts: [
-            { text: transcriptionPrompt },
-            {
-              inlineData: {
-                data: base64Audio,
-                mimeType: mimeType
-              }
-            }
-          ]
-        }
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            text: { type: Type.STRING }
-          },
-          required: ["text"]
-        }
-      }
-    });
-
-    const transcriptionResult = JSON.parse(transcriptionResponse.text || "{}");
-    const transcribedText = transcriptionResult.text || "לא ניתן היה להפיק תמלול.";
-
-    // Step 2: Summarize the transcribed text
-    const summaryResponse = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        {
-          parts: [
-            { text: summaryPrompt(transcribedText) }
+            { text: summaryPrompt }
           ]
         }
       ],
@@ -142,31 +165,24 @@ ${transcribedText}
       }
     });
 
-    const summaryResult = JSON.parse(summaryResponse.text || "{}");
-    const summary = summaryResult.summary || "לא ניתן היה להפיק סיכום.";
+    const result = JSON.parse(response.text || "{}");
+    const summary = result.summary || "לא ניתן היה להפיק סיכום.";
 
-    // Map tags object to ConversationTag[]
-    const tagsObj = summaryResult.tags || {};
+    const tagsObj = result.tags || {};
     const tags: ConversationTag[] = TAGS_META.map(meta => ({
       id: meta.id,
       label: meta.label,
       detected: tagsObj[meta.id] || false
     }));
 
-    // Map key_points to KeyPoint[]
-    const keyPoints: KeyPoint[] = (summaryResult.key_points || []).map((kp: any) => ({
+    const keyPoints: KeyPoint[] = (result.key_points || []).map((kp: any) => ({
       label: kp.label || "",
       quote: kp.quote || ""
     }));
 
-    return {
-      text: transcribedText,
-      summary: summary,
-      tags: tags,
-      keyPoints: keyPoints
-    };
+    return { summary, tags, keyPoints };
   } catch (error) {
-    console.error("Transcription error:", error);
-    throw new Error("נכשלה פעולת התמלול. וודא שקובץ האודיו תקין.");
+    console.error("Analysis error:", error);
+    throw new Error("נכשלה פעולת הניתוח. נסה שוב.");
   }
 };

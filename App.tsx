@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { AppState, TranscriptionResult, HistoryEntry } from './types';
-import { transcribeAudio } from './services/gemini';
+import { AppState, TranscriptionResult, HistoryEntry, TranscriptionModel } from './types';
+import { transcribeAudioGemini, analyzeTranscription } from './services/gemini';
+import { transcribeAudioOpenAI } from './services/openai';
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
@@ -12,6 +13,8 @@ const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [viewingEntry, setViewingEntry] = useState<HistoryEntry | null>(null);
   const [activeQuote, setActiveQuote] = useState<string | null>(null);
+  const [transcriptionModel, setTranscriptionModel] = useState<TranscriptionModel>('gemini');
+  const [transcribedText, setTranscribedText] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -45,19 +48,6 @@ const App: React.FC = () => {
     if (viewingEntry?.id === id) setViewingEntry(null);
   };
 
-  // Helper to convert Blob to Base64
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = (reader.result as string).split(',')[1];
-        resolve(base64String);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
   const startRecording = async () => {
     try {
       setErrorMessage(null);
@@ -85,36 +75,11 @@ const App: React.FC = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
 
         try {
-          const base64 = await blobToBase64(audioBlob);
-          const transcription = await transcribeAudio(base64, 'audio/webm');
-
-          setResult({
-            text: transcription.text,
-            summary: transcription.summary,
-            language: 'he',
-            timestamp: new Date().toLocaleTimeString(),
-            tags: transcription.tags,
-            keyPoints: transcription.keyPoints
-          });
-
-          // Save to history
-          const newEntry: HistoryEntry = {
-            id: crypto.randomUUID(),
-            text: transcription.text,
-            summary: transcription.summary || '',
-            language: 'he',
-            timestamp: new Date().toISOString(),
-            duration: timer,
-            tags: transcription.tags,
-            keyPoints: transcription.keyPoints
-          };
-          setHistory(prev => {
-            const updated = [newEntry, ...prev];
-            localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
-            return updated;
-          });
-
-          setStatus(AppState.RESULT);
+          const text = transcriptionModel === 'openai'
+            ? await transcribeAudioOpenAI(audioBlob, 'audio/webm')
+            : await transcribeAudioGemini(audioBlob, 'audio/webm');
+          setTranscribedText(text);
+          setStatus(AppState.TRANSCRIBED);
         } catch (err: any) {
           setErrorMessage(err.message || "שגיאה בתמלול");
           setStatus(AppState.ERROR);
@@ -152,25 +117,40 @@ const App: React.FC = () => {
     setErrorMessage(null);
     setStatus(AppState.PROCESSING);
     try {
-      const base64 = await blobToBase64(file);
-      const transcription = await transcribeAudio(base64, file.type);
+      const text = transcriptionModel === 'openai'
+        ? await transcribeAudioOpenAI(file, file.type)
+        : await transcribeAudioGemini(file, file.type);
+      setTranscribedText(text);
+      setStatus(AppState.TRANSCRIBED);
+    } catch (err: any) {
+      setErrorMessage(err.message || "שגיאה בתמלול");
+      setStatus(AppState.ERROR);
+    }
+    e.target.value = '';
+  };
+
+  const handleAnalyze = async () => {
+    if (!transcribedText) return;
+    setStatus(AppState.ANALYZING);
+    try {
+      const analysis = await analyzeTranscription(transcribedText);
       setResult({
-        text: transcription.text,
-        summary: transcription.summary,
+        text: transcribedText,
+        summary: analysis.summary,
         language: 'he',
-        timestamp: new Date().toLocaleTimeString(),
-        tags: transcription.tags,
-        keyPoints: transcription.keyPoints
+        timestamp: new Date().toISOString(),
+        tags: analysis.tags,
+        keyPoints: analysis.keyPoints
       });
       const newEntry: HistoryEntry = {
         id: crypto.randomUUID(),
-        text: transcription.text,
-        summary: transcription.summary || '',
+        text: transcribedText,
+        summary: analysis.summary,
         language: 'he',
         timestamp: new Date().toISOString(),
-        duration: 0,
-        tags: transcription.tags,
-        keyPoints: transcription.keyPoints
+        duration: timer,
+        tags: analysis.tags,
+        keyPoints: analysis.keyPoints
       };
       setHistory(prev => {
         const updated = [newEntry, ...prev];
@@ -179,10 +159,9 @@ const App: React.FC = () => {
       });
       setStatus(AppState.RESULT);
     } catch (err: any) {
-      setErrorMessage(err.message || "שגיאה בתמלול");
+      setErrorMessage(err.message || "שגיאה בניתוח");
       setStatus(AppState.ERROR);
     }
-    e.target.value = '';
   };
 
   const formatTime = (seconds: number) => {
@@ -197,6 +176,7 @@ const App: React.FC = () => {
     setErrorMessage(null);
     setTimer(0);
     setActiveQuote(null);
+    setTranscribedText(null);
   };
 
   // Helper to render text with highlighted quote
@@ -470,6 +450,21 @@ const App: React.FC = () => {
                   <li>התחל לדבר - ההקלטה תתחיל באופן אוטומטי</li>
                 </ul>
               </div>
+              <div className="space-y-2 text-center">
+                <p className="text-sm text-slate-400 font-semibold">מודל תמלול:</p>
+                <div className="flex gap-2 justify-center">
+                  <button onClick={() => setTranscriptionModel('gemini')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                    transcriptionModel === 'gemini'
+                      ? 'bg-cyan-500/30 text-cyan-200 border-cyan-500/60'
+                      : 'bg-slate-700/30 text-slate-400 border-slate-600/50 hover:border-slate-500'
+                  }`}>Gemini</button>
+                  <button onClick={() => setTranscriptionModel('openai')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                    transcriptionModel === 'openai'
+                      ? 'bg-cyan-500/30 text-cyan-200 border-cyan-500/60'
+                      : 'bg-slate-700/30 text-slate-400 border-slate-600/50 hover:border-slate-500'
+                  }`}>OpenAI Whisper</button>
+                </div>
+              </div>
               <div className="flex flex-col items-center gap-6">
                 <button
                   onClick={startRecording}
@@ -518,8 +513,41 @@ const App: React.FC = () => {
                   <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyan-500 border-r-blue-500 animate-spin"></div>
                 </div>
               </div>
-              <h2 className="text-2xl font-bold text-white">מעבד את השיחה...</h2>
-              <p className="text-slate-400">Gemini AI מנתח את האודיו ומייצר תמלול וסיכום</p>
+              <h2 className="text-2xl font-bold text-white">מתמלל את השיחה...</h2>
+              <p className="text-slate-400">{transcriptionModel === 'openai' ? 'OpenAI Whisper מתמלל את האודיו' : 'Gemini AI מתמלל את האודיו'}</p>
+            </div>
+          )}
+
+          {status === AppState.TRANSCRIBED && transcribedText && (
+            <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-white">תמלול הושלם</h2>
+                <span className="text-green-400 text-sm font-semibold">✓ מוכן לניתוח</span>
+              </div>
+              <div className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto custom-scrollbar font-mono text-sm text-right">
+                {transcribedText}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={handleAnalyze} className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                  🔍 נתח שיחה
+                </button>
+                <button onClick={reset} className="py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-cyan-500/10 text-white rounded-xl font-semibold transition-all active:scale-95">
+                  ↻ הקלטה חדשה
+                </button>
+              </div>
+            </div>
+          )}
+
+          {status === AppState.ANALYZING && (
+            <div className="text-center space-y-6 py-12">
+              <div className="flex justify-center">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyan-500 border-r-blue-500 animate-spin"></div>
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold text-white">מנתח את השיחה...</h2>
+              <p className="text-slate-400">Gemini AI מייצר סיכום, תגיות ונקודות חשובות</p>
             </div>
           )}
 
