@@ -212,7 +212,7 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <header className="mb-12 w-full max-w-2xl flex justify-between items-center">
         <div className="text-center flex-1">
-          <h1 className="text-5xl font-black bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2">CallTranscribe</h1>
+          <h1 className="text-5xl font-black bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2">Tamlelan</h1>
           <p className="text-slate-400 text-lg">תמלול שיחות בזקן אחד</p>
         </div>
         <button
@@ -660,7 +660,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="mt-10 text-slate-500 text-xs">
-        &copy; {new Date().getFullYear()} CallTranscribe - Powered by Gemini AI
+        &copy; {new Date().getFullYear()} Tamlelan - Powered by Gemini AI
       </footer>
 
       <style>{`
