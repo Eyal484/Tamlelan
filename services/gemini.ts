@@ -1,7 +1,15 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import { ConversationTag, KeyPoint } from "../types";
 
-export const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<{ text: string; summary: string }> => {
+const TAGS_META = [
+  { id: 'self_intro',         label: 'בצגב עצמית' },
+  { id: 'offer_sent',         label: 'הוצגה הצעת מחיר' },
+  { id: 'offer_followup',     label: 'בדיקה על הצעת מחיר' },
+  { id: 'performance_issue',  label: 'בעיות בביצועים' },
+];
+
+export const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<{ text: string; summary: string; tags: ConversationTag[]; keyPoints: KeyPoint[] }> => {
   // Fix: Directly use process.env.API_KEY in the initialization as per SDK guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -23,25 +31,40 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string): Pr
   "text": "התמלול המלא כאן..."
 }`;
 
-  // Step 2: Summarize the transcribed text
-  const summaryPrompt = (transcribedText: string) => `אתה עוזר מקצועי לניתוח שיחות מכירות. על בסיס התמלול שלהלן, ספק סיכום מדויק.
+  // Step 2: Summarize the transcribed text with tag detection and key points
+  const summaryPrompt = (transcribedText: string) => `אתה עוזר מקצועי לניתוח שיחות מכירות עבור דרושים IL (אתר מודעות עבודה בישראל). על בסיס התמלול שלהלן, ספק סיכום מדויק, זהה אירועי שיחה וחלץ נקודות חשובות.
 
 התמלול:
 ${transcribedText}
 
 סיכום יוקד על:
 - שמות הלקוח והמוכר (מהתמלול)
-- מוצרים/שירותים שנדונו
+- חבילות משרות/שירותים שנדונו ומחיריהן
 - מחירים ותנאים בדיוק כמו בשיחה
 - החלטה סופית וסטטוס העסקה
 - צעדים הבאים
 - כל תנאי מיוחד או מוגבלות
 
-המשימה שלך היא לחלץ את המידע החשוב ביותר בצורה ברורה ומדויקת.
+אירועי שיחה שיש לזהות:
+- self_intro: הלקוח או המוכר הציגו את עצמם (בצגב עצמית)
+- offer_sent: נשלחה או הוצגה הצעת מחיר (הוצגה הצעת מחיר)
+- offer_followup: עוקבים על הצעת מחיר קודמת (בדיקה על הצעת מחיר)
+- performance_issue: הלקוח התלונן על כמות מועמדים או בעיות בביצועים (בעיות בביצועים)
 
-החזר את הסיכום בתוך JSON:
+נקודות חשובות: חלץ עד 5 נקודות חזוקות מהשיחה (כמו חבילות משרות, מחירים, החלטות). עבור כל נקודה, ספק את התווית (label) וציטוט מדויק מהתמלול (quote) שמתאים לנקודה זו.
+
+החזר את הנתונים בתוך JSON:
 {
-  "summary": "סיכום מכירות כאן..."
+  "summary": "סיכום מכירות כאן...",
+  "tags": {
+    "self_intro": true/false,
+    "offer_sent": true/false,
+    "offer_followup": true/false,
+    "performance_issue": true/false
+  },
+  "key_points": [
+    { "label": "חבילת 10 משרות ב-4000₪", "quote": "exact quote from transcript" }
+  ]
 }`;
 
   try {
@@ -91,9 +114,30 @@ ${transcribedText}
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            summary: { type: Type.STRING }
+            summary: { type: Type.STRING },
+            tags: {
+              type: Type.OBJECT,
+              properties: {
+                self_intro: { type: Type.BOOLEAN },
+                offer_sent: { type: Type.BOOLEAN },
+                offer_followup: { type: Type.BOOLEAN },
+                performance_issue: { type: Type.BOOLEAN }
+              },
+              required: ["self_intro", "offer_sent", "offer_followup", "performance_issue"]
+            },
+            key_points: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  label: { type: Type.STRING },
+                  quote: { type: Type.STRING }
+                },
+                required: ["label", "quote"]
+              }
+            }
           },
-          required: ["summary"]
+          required: ["summary", "tags", "key_points"]
         }
       }
     });
@@ -101,9 +145,25 @@ ${transcribedText}
     const summaryResult = JSON.parse(summaryResponse.text || "{}");
     const summary = summaryResult.summary || "לא ניתן היה להפיק סיכום.";
 
+    // Map tags object to ConversationTag[]
+    const tagsObj = summaryResult.tags || {};
+    const tags: ConversationTag[] = TAGS_META.map(meta => ({
+      id: meta.id,
+      label: meta.label,
+      detected: tagsObj[meta.id] || false
+    }));
+
+    // Map key_points to KeyPoint[]
+    const keyPoints: KeyPoint[] = (summaryResult.key_points || []).map((kp: any) => ({
+      label: kp.label || "",
+      quote: kp.quote || ""
+    }));
+
     return {
       text: transcribedText,
-      summary: summary
+      summary: summary,
+      tags: tags,
+      keyPoints: keyPoints
     };
   } catch (error) {
     console.error("Transcription error:", error);

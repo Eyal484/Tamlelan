@@ -11,6 +11,7 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [viewingEntry, setViewingEntry] = useState<HistoryEntry | null>(null);
+  const [activeQuote, setActiveQuote] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -118,7 +119,9 @@ const App: React.FC = () => {
             text: transcription.text,
             summary: transcription.summary,
             language: 'he',
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: new Date().toLocaleTimeString(),
+            tags: transcription.tags,
+            keyPoints: transcription.keyPoints
           });
 
           // Save to history
@@ -128,7 +131,9 @@ const App: React.FC = () => {
             summary: transcription.summary || '',
             language: 'he',
             timestamp: new Date().toISOString(),
-            duration: timer
+            duration: timer,
+            tags: transcription.tags,
+            keyPoints: transcription.keyPoints
           };
           setHistory(prev => {
             const updated = [newEntry, ...prev];
@@ -179,6 +184,28 @@ const App: React.FC = () => {
     setResult(null);
     setErrorMessage(null);
     setTimer(0);
+    setActiveQuote(null);
+  };
+
+  // Helper to render text with highlighted quote
+  const renderHighlightedText = (text: string, quote: string | null) => {
+    if (!quote) return text;
+
+    const parts = text.split(quote);
+    return (
+      <>
+        {parts.map((part, index) => (
+          <React.Fragment key={index}>
+            {part}
+            {index < parts.length - 1 && (
+              <mark style={{ backgroundColor: '#06b6d4', color: '#000' }} className="font-semibold rounded px-1">
+                {quote}
+              </mark>
+            )}
+          </React.Fragment>
+        ))}
+      </>
+    );
   };
 
   return (
@@ -275,17 +302,59 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Tags Display */}
+            {viewingEntry.tags && viewingEntry.tags.length > 0 && (
+              <section className="space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">אירועי שיחה</h3>
+                <div className="flex flex-wrap gap-2">
+                  {viewingEntry.tags.map(tag => (
+                    <div
+                      key={tag.id}
+                      className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                        tag.detected
+                          ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50'
+                          : 'bg-slate-700/30 text-slate-400 border border-slate-600/50 line-through'
+                      }`}
+                    >
+                      {tag.label}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
               <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
                 {viewingEntry.summary}
+
+                {/* Key Points in Summary */}
+                {viewingEntry.keyPoints && viewingEntry.keyPoints.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-cyan-500/30 flex flex-wrap gap-2">
+                    {viewingEntry.keyPoints.map((kp, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
+                        onMouseLeave={() => setActiveQuote(null)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          activeQuote === kp.quote
+                            ? 'bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/50'
+                            : 'bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30'
+                        }`}
+                        title={kp.label}
+                      >
+                        {kp.label.substring(0, 40)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
 
             <section className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">תמלול מלא</h3>
               <div className="p-5 bg-slate-900/30 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar font-mono text-sm">
-                {viewingEntry.text}
+                {renderHighlightedText(viewingEntry.text, activeQuote)}
               </div>
             </section>
 
@@ -376,17 +445,59 @@ const App: React.FC = () => {
                 </button>
               </div>
 
+              {/* Tags Display */}
+              {result.tags && result.tags.length > 0 && (
+                <section className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">אירועי שיחה</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {result.tags.map(tag => (
+                      <div
+                        key={tag.id}
+                        className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                          tag.detected
+                            ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50'
+                            : 'bg-slate-700/30 text-slate-400 border border-slate-600/50 line-through'
+                        }`}
+                      >
+                        {tag.label}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <section className="space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
                 <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
                   {result.summary}
+
+                  {/* Key Points in Summary */}
+                  {result.keyPoints && result.keyPoints.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-cyan-500/30 flex flex-wrap gap-2">
+                      {result.keyPoints.map((kp, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
+                          onMouseLeave={() => setActiveQuote(null)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            activeQuote === kp.quote
+                              ? 'bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/50'
+                              : 'bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30'
+                          }`}
+                          title={kp.label}
+                        >
+                          {kp.label.substring(0, 40)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </section>
 
               <section className="space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">תמלול מלא</h3>
                 <div className="p-5 bg-slate-900/30 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar font-mono text-sm">
-                  {result.text}
+                  {renderHighlightedText(result.text, activeQuote)}
                 </div>
               </section>
 

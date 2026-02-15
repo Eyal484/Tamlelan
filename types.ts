@@ -1,9 +1,22 @@
 
+export interface ConversationTag {
+  id: string;
+  label: string;
+  detected: boolean;
+}
+
+export interface KeyPoint {
+  label: string;
+  quote: string;
+}
+
 export interface TranscriptionResult {
   text: string;
   summary?: string;
   language: string;
   timestamp: string;
+  tags?: ConversationTag[];
+  keyPoints?: KeyPoint[];
 }
 
 export interface HistoryEntry {
@@ -13,6 +26,8 @@ export interface HistoryEntry {
   language: string;
   timestamp: string;
   duration: number;
+  tags?: ConversationTag[];
+  keyPoints?: KeyPoint[];
 }
 
 export enum AppState {
