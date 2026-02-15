@@ -1,8 +1,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { AppState, TranscriptionResult, HistoryEntry, TranscriptionModel } from './types';
+import { AppState, TranscriptionResult, HistoryEntry } from './types';
 import { transcribeAudioGemini, analyzeTranscription } from './services/gemini';
-import { transcribeAudioOpenAI } from './services/openai';
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
@@ -13,7 +12,6 @@ const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [viewingEntry, setViewingEntry] = useState<HistoryEntry | null>(null);
   const [activeQuote, setActiveQuote] = useState<string | null>(null);
-  const [transcriptionModel, setTranscriptionModel] = useState<TranscriptionModel>('gemini');
   const [transcribedText, setTranscribedText] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -75,9 +73,7 @@ const App: React.FC = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
 
         try {
-          const text = transcriptionModel === 'openai'
-            ? await transcribeAudioOpenAI(audioBlob, 'audio/webm')
-            : await transcribeAudioGemini(audioBlob, 'audio/webm');
+          const text = await transcribeAudioGemini(audioBlob, 'audio/webm');
           setTranscribedText(text);
           setStatus(AppState.TRANSCRIBED);
         } catch (err: any) {
@@ -117,9 +113,7 @@ const App: React.FC = () => {
     setErrorMessage(null);
     setStatus(AppState.PROCESSING);
     try {
-      const text = transcriptionModel === 'openai'
-        ? await transcribeAudioOpenAI(file, file.type)
-        : await transcribeAudioGemini(file, file.type);
+      const text = await transcribeAudioGemini(file, file.type);
       setTranscribedText(text);
       setStatus(AppState.TRANSCRIBED);
     } catch (err: any) {
@@ -450,21 +444,6 @@ const App: React.FC = () => {
                   <li>התחל לדבר - ההקלטה תתחיל באופן אוטומטי</li>
                 </ul>
               </div>
-              <div className="space-y-2 text-center">
-                <p className="text-sm text-slate-400 font-semibold">מודל תמלול:</p>
-                <div className="flex gap-2 justify-center">
-                  <button onClick={() => setTranscriptionModel('gemini')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
-                    transcriptionModel === 'gemini'
-                      ? 'bg-cyan-500/30 text-cyan-200 border-cyan-500/60'
-                      : 'bg-slate-700/30 text-slate-400 border-slate-600/50 hover:border-slate-500'
-                  }`}>Gemini</button>
-                  <button onClick={() => setTranscriptionModel('openai')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
-                    transcriptionModel === 'openai'
-                      ? 'bg-cyan-500/30 text-cyan-200 border-cyan-500/60'
-                      : 'bg-slate-700/30 text-slate-400 border-slate-600/50 hover:border-slate-500'
-                  }`}>OpenAI Whisper</button>
-                </div>
-              </div>
               <div className="flex flex-col items-center gap-6">
                 <button
                   onClick={startRecording}
@@ -514,7 +493,7 @@ const App: React.FC = () => {
                 </div>
               </div>
               <h2 className="text-2xl font-bold text-white">מתמלל את השיחה...</h2>
-              <p className="text-slate-400">{transcriptionModel === 'openai' ? 'OpenAI Whisper מתמלל את האודיו' : 'Gemini AI מתמלל את האודיו'}</p>
+              <p className="text-slate-400">Gemini AI מתמלל את האודיו</p>
             </div>
           )}
 

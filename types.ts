@@ -30,8 +30,6 @@ export interface HistoryEntry {
   keyPoints?: KeyPoint[];
 }
 
-export type TranscriptionModel = 'gemini' | 'openai';
-
 export enum AppState {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',
