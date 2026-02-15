@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   // Fix: Using number instead of NodeJS.Timeout for browser-based React application
   const intervalRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -143,6 +144,45 @@ const App: React.FC = () => {
       // Stop all tracks to release hardware
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErrorMessage(null);
+    setStatus(AppState.PROCESSING);
+    try {
+      const base64 = await blobToBase64(file);
+      const transcription = await transcribeAudio(base64, file.type);
+      setResult({
+        text: transcription.text,
+        summary: transcription.summary,
+        language: 'he',
+        timestamp: new Date().toLocaleTimeString(),
+        tags: transcription.tags,
+        keyPoints: transcription.keyPoints
+      });
+      const newEntry: HistoryEntry = {
+        id: crypto.randomUUID(),
+        text: transcription.text,
+        summary: transcription.summary || '',
+        language: 'he',
+        timestamp: new Date().toISOString(),
+        duration: 0,
+        tags: transcription.tags,
+        keyPoints: transcription.keyPoints
+      };
+      setHistory(prev => {
+        const updated = [newEntry, ...prev];
+        localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+        return updated;
+      });
+      setStatus(AppState.RESULT);
+    } catch (err: any) {
+      setErrorMessage(err.message || "שגיאה בתמלול");
+      setStatus(AppState.ERROR);
+    }
+    e.target.value = '';
   };
 
   const formatTime = (seconds: number) => {
@@ -407,10 +447,19 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+
         {/* Status Display */}
         {!showHistory && !viewingEntry && (
           <div className="flex flex-col items-center justify-center space-y-6">
-          
+
           {status === AppState.IDLE && (
             <div className="text-center space-y-8 py-8">
               <div className="bg-slate-900/50 border border-cyan-500/30 p-6 rounded-2xl text-slate-200 text-sm">
@@ -421,16 +470,25 @@ const App: React.FC = () => {
                   <li>התחל לדבר - ההקלטה תתחיל באופן אוטומטי</li>
                 </ul>
               </div>
-              <button
-                onClick={startRecording}
-                className="group relative flex items-center justify-center w-28 h-28 bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-full transition-all shadow-2xl hover:shadow-cyan-500/50 active:scale-95 mx-auto"
-              >
-                <div className="absolute inset-0 rounded-full border-4 border-cyan-400 group-hover:scale-125 group-hover:border-cyan-300 transition-all opacity-60"></div>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </button>
-              <p className="font-bold text-xl text-white">התחל הקלטה</p>
+              <div className="flex flex-col items-center gap-6">
+                <button
+                  onClick={startRecording}
+                  className="group relative flex items-center justify-center w-28 h-28 bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-full transition-all shadow-2xl hover:shadow-cyan-500/50 active:scale-95"
+                >
+                  <div className="absolute inset-0 rounded-full border-4 border-cyan-400 group-hover:scale-125 group-hover:border-cyan-300 transition-all opacity-60"></div>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </button>
+                <p className="font-bold text-xl text-white">התחל הקלטה</p>
+                <div className="text-slate-400 text-sm">— או —</div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center justify-center px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-slate-500/20 active:scale-95 gap-2"
+                >
+                  📁 העלה קובץ אודיו
+                </button>
+              </div>
             </div>
           )}
 
