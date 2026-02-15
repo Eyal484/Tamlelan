@@ -182,40 +182,40 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 bg-gray-50">
-      <header className="mb-10 w-full max-w-2xl flex justify-between items-center">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <header className="mb-12 w-full max-w-2xl flex justify-between items-center">
         <div className="text-center flex-1">
-          <h1 className="text-4xl font-bold text-indigo-700 mb-2">CallTranscribe Pro</h1>
-          <p className="text-gray-600">הפוך שיחות לטקסט וסיכומים בקליק</p>
+          <h1 className="text-5xl font-black bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2">CallTranscribe</h1>
+          <p className="text-slate-400 text-lg">תמלול שיחות בזקן אחד</p>
         </div>
         <button
           onClick={() => {
             setShowHistory(!showHistory);
             setViewingEntry(null);
           }}
-          className="absolute right-8 top-8 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold text-gray-800 transition-colors flex items-center gap-2"
+          className="absolute right-8 top-8 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold text-white transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-cyan-500/20"
         >
           📋 {history.length}
         </button>
       </header>
 
-      <main className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8 transition-all">
+      <main className="w-full max-w-2xl bg-slate-800/50 backdrop-blur-xl rounded-3xl shadow-2xl p-8 transition-all border border-slate-700/50">
 
         {/* History Panel */}
         {showHistory && !viewingEntry && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center border-b pb-4">
-              <h2 className="text-2xl font-bold text-gray-800">הקלטות קודמות</h2>
+          <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-6">
+              <h2 className="text-3xl font-bold text-white">הקלטות קודמות</h2>
               <button
                 onClick={() => setShowHistory(false)}
-                className="text-sm text-indigo-600 hover:text-indigo-800 font-semibold"
+                className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
               >
                 חזור
               </button>
             </div>
 
             {history.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-12 text-slate-400">
                 <p className="text-lg">אין הקלטות שמורות</p>
               </div>
             ) : (
@@ -224,16 +224,16 @@ const App: React.FC = () => {
                   <div
                     key={entry.id}
                     onClick={() => setViewingEntry(entry)}
-                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="p-4 border border-slate-600/30 rounded-xl hover:border-cyan-500/50 hover:bg-slate-700/30 cursor-pointer transition-all duration-200 group"
                   >
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex-1 text-right">
-                        <p className="font-semibold text-gray-800 line-clamp-2">
+                        <p className="font-semibold text-white line-clamp-2 group-hover:text-cyan-300 transition-colors">
                           {entry.summary.substring(0, 80)}
                           {entry.summary.length > 80 ? '...' : ''}
                         </p>
-                        <p className="text-sm text-gray-500 mt-1">{formatDate(entry.timestamp)}</p>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-sm text-slate-400 mt-2">{formatDate(entry.timestamp)}</p>
+                        <p className="text-xs text-slate-500 mt-1 font-mono">
                           {Math.floor(entry.duration / 60).toString().padStart(2, '0')}:{(entry.duration % 60).toString().padStart(2, '0')}
                         </p>
                       </div>
@@ -242,7 +242,7 @@ const App: React.FC = () => {
                           e.stopPropagation();
                           deleteEntry(entry.id);
                         }}
-                        className="p-2 hover:bg-red-50 rounded text-red-500 hover:text-red-700 transition-colors"
+                        className="p-2 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all duration-200"
                       >
                         🗑
                       </button>
@@ -256,51 +256,51 @@ const App: React.FC = () => {
 
         {/* Entry Detail View */}
         {viewingEntry && (
-          <div className="w-full space-y-6">
-            <div className="flex justify-between items-center border-b pb-4">
-              <h2 className="text-2xl font-bold text-gray-800">פרטי הקלטה</h2>
+          <div className="w-full space-y-6 animate-in fade-in slide-in-from-top-4">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-6">
+              <h2 className="text-3xl font-bold text-white">פרטי הקלטה</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => deleteEntry(viewingEntry.id)}
-                  className="px-3 py-2 text-red-500 hover:text-red-700 font-bold transition-colors"
+                  className="px-3 py-2 text-red-400 hover:text-red-300 font-semibold transition-colors hover:bg-red-500/10 rounded-lg"
                 >
                   🗑 מחק
                 </button>
                 <button
                   onClick={() => setViewingEntry(null)}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 font-semibold"
+                  className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
                 >
                   חזור
                 </button>
               </div>
             </div>
 
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">סיכום המפגש</h3>
-              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-900 leading-relaxed">
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
+              <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
                 {viewingEntry.summary}
               </div>
             </section>
 
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">תמלול מלא</h3>
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar">
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">תמלול מלא</h3>
+              <div className="p-5 bg-slate-900/30 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar font-mono text-sm">
                 {viewingEntry.text}
               </div>
             </section>
 
-            <div className="flex gap-4 pt-4">
+            <div className="flex gap-3 pt-4">
               <button
                 onClick={() => navigator.clipboard.writeText(`${viewingEntry.summary}\n\n${viewingEntry.text}`)}
-                className="flex-1 py-3 px-4 bg-gray-800 hover:bg-black text-white rounded-lg font-bold transition-colors"
+                className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
               >
                 העתק הכל
               </button>
               <button
                 onClick={() => window.print()}
-                className="flex-1 py-3 px-4 border border-gray-300 hover:bg-gray-100 rounded-lg font-bold transition-colors"
+                className="flex-1 py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-slate-700/50 text-white rounded-xl font-semibold transition-all duration-200"
               >
-                הדפס / שמור כ-PDF
+                הדפס / PDF
               </button>
             </div>
           </div>
@@ -311,106 +311,111 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center justify-center space-y-6">
           
           {status === AppState.IDLE && (
-            <div className="text-center space-y-6">
-              <div className="bg-indigo-50 p-6 rounded-lg text-indigo-800 text-sm border border-indigo-100">
-                <p className="font-semibold mb-2">הנחיות להקלטת שיחה:</p>
-                <ul className="list-disc list-inside text-right space-y-1">
-                  <li>לחץ על "התחל הקלטה"</li>
-                  <li>אם תתבקש, בחר את המסך/טאב בו מתבצעת השיחה</li>
-                  <li>סמן את התיבה <strong>"שתף שמע של המערכת"</strong> כדי להקליט גם את הצד השני</li>
+            <div className="text-center space-y-8 py-8">
+              <div className="bg-slate-900/50 border border-cyan-500/30 p-6 rounded-2xl text-slate-200 text-sm">
+                <p className="font-bold mb-3 text-white">הנחיות להקלטת שיחה:</p>
+                <ul className="list-disc list-inside text-right space-y-2">
+                  <li>לחץ על כפתור ההקלטה</li>
+                  <li>בחר את המסך/טאב בו מתבצעת השיחה</li>
+                  <li>סמן <strong>"שתף שמע של המערכת"</strong> להקלטת שני הצדדים</li>
                 </ul>
               </div>
-              <button 
+              <button
                 onClick={startRecording}
-                className="group relative flex items-center justify-center w-24 h-24 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-all shadow-lg hover:shadow-indigo-200 active:scale-95 mx-auto"
+                className="group relative flex items-center justify-center w-28 h-28 bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-full transition-all shadow-2xl hover:shadow-cyan-500/50 active:scale-95 mx-auto"
               >
-                <div className="absolute inset-0 rounded-full border-4 border-indigo-200 group-hover:scale-110 transition-transform"></div>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="absolute inset-0 rounded-full border-4 border-cyan-400 group-hover:scale-125 group-hover:border-cyan-300 transition-all opacity-60"></div>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               </button>
-              <p className="font-semibold text-lg text-gray-700">התחל הקלטה</p>
+              <p className="font-bold text-xl text-white">התחל הקלטה</p>
             </div>
           )}
 
           {status === AppState.RECORDING && (
-            <div className="text-center space-y-6">
-              <div className="flex items-center justify-center">
-                <div className="w-4 h-4 bg-red-500 rounded-full animate-ping mr-2"></div>
-                <span className="text-2xl font-mono font-bold text-gray-800">{formatTime(timer)}</span>
+            <div className="text-center space-y-8 py-8">
+              <div className="flex items-center justify-center gap-3">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-5xl font-mono font-bold text-white">{formatTime(timer)}</span>
               </div>
-              <button 
+              <button
                 onClick={stopRecording}
-                className="flex items-center justify-center w-24 h-24 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all shadow-lg active:scale-95 mx-auto"
+                className="flex items-center justify-center w-28 h-28 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 text-white rounded-full transition-all shadow-2xl hover:shadow-red-500/50 active:scale-95 mx-auto"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="currentColor" viewBox="0 0 24 24">
                   <rect x="6" y="6" width="12" height="12" rx="2" />
                 </svg>
               </button>
-              <p className="font-semibold text-lg text-gray-700">סיים הקלטה ותמלל</p>
+              <p className="font-bold text-xl text-white">סיים הקלטה ותמלל</p>
             </div>
           )}
 
           {status === AppState.PROCESSING && (
-            <div className="text-center space-y-4 py-8">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-600 mx-auto"></div>
-              <h2 className="text-xl font-bold text-gray-800">מעבד את השיחה...</h2>
-              <p className="text-gray-500">Gemini AI מנתח את האודיו ומייצר תמלול וסיכום</p>
+            <div className="text-center space-y-6 py-12">
+              <div className="flex justify-center">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyan-500 border-r-blue-500 animate-spin"></div>
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold text-white">מעבד את השיחה...</h2>
+              <p className="text-slate-400">Gemini AI מנתח את האודיו ומייצר תמלול וסיכום</p>
             </div>
           )}
 
           {status === AppState.RESULT && result && (
             <div className="w-full space-y-6 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-              <div className="flex justify-between items-center border-b pb-4">
-                <h2 className="text-2xl font-bold text-gray-800">תוצאות התמלול</h2>
-                <button 
+              <div className="flex justify-between items-center border-b border-slate-700 pb-6">
+                <h2 className="text-3xl font-bold text-white">תוצאות התמלול</h2>
+                <button
                   onClick={reset}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 font-semibold"
+                  className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
                 >
                   הקלטה חדשה
                 </button>
               </div>
 
-              <section className="space-y-2">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">סיכום המפגש</h3>
-                <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-900 leading-relaxed">
+              <section className="space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
+                <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
                   {result.summary}
                 </div>
               </section>
 
-              <section className="space-y-2">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">תמלול מלא</h3>
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar">
+              <section className="space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">תמלול מלא</h3>
+                <div className="p-5 bg-slate-900/30 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar font-mono text-sm">
                   {result.text}
                 </div>
               </section>
 
-              <div className="flex gap-4 pt-4">
-                <button 
+              <div className="flex gap-3 pt-4">
+                <button
                   onClick={() => navigator.clipboard.writeText(`${result.summary}\n\n${result.text}`)}
-                  className="flex-1 py-3 px-4 bg-gray-800 hover:bg-black text-white rounded-lg font-bold transition-colors"
+                  className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
                 >
                   העתק הכל
                 </button>
-                <button 
+                <button
                   onClick={() => window.print()}
-                  className="flex-1 py-3 px-4 border border-gray-300 hover:bg-gray-100 rounded-lg font-bold transition-colors"
+                  className="flex-1 py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-slate-700/50 text-white rounded-xl font-semibold transition-all duration-200"
                 >
-                  הדפס / שמור כ-PDF
+                  הדפס / PDF
                 </button>
               </div>
             </div>
           )}
 
           {status === AppState.ERROR && (
-            <div className="text-center space-y-4 py-8">
-              <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-100 max-w-sm">
-                <p className="font-bold mb-1">אופס! משהו השתבש</p>
-                <p className="text-sm">{errorMessage}</p>
+            <div className="text-center space-y-6 py-12">
+              <div className="bg-red-500/10 text-red-300 p-6 rounded-2xl border border-red-500/30 max-w-sm mx-auto">
+                <p className="font-bold mb-2 text-red-200 text-lg">אופס! משהו השתבש</p>
+                <p className="text-sm text-red-300">{errorMessage}</p>
               </div>
-              <button 
+              <button
                 onClick={reset}
-                className="py-2 px-6 bg-indigo-600 text-white rounded-full font-bold hover:bg-indigo-700 transition-colors"
+                className="py-3 px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
               >
                 נסה שוב
               </button>
@@ -421,8 +426,8 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <footer className="mt-8 text-gray-400 text-xs">
-        &copy; {new Date().getFullYear()} CallTranscribe Pro - Powered by Gemini AI
+      <footer className="mt-10 text-slate-500 text-xs">
+        &copy; {new Date().getFullYear()} CallTranscribe - Powered by Gemini AI
       </footer>
 
       <style>{`
@@ -430,14 +435,14 @@ const App: React.FC = () => {
           width: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f1f1f1;
+          background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #d1d5db;
+          background: #64748b;
           border-radius: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #9ca3af;
+          background: #94a3b8;
         }
       `}</style>
     </div>
