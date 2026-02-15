@@ -283,36 +283,57 @@ const App: React.FC = () => {
 
         {/* Entry Detail View */}
         {viewingEntry && (
-          <div className="w-full space-y-6 animate-in fade-in slide-in-from-top-4">
-            <div className="flex justify-between items-center border-b border-slate-700 pb-6">
-              <h2 className="text-3xl font-bold text-white">פרטי הקלטה</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => deleteEntry(viewingEntry.id)}
-                  className="px-3 py-2 text-red-400 hover:text-red-300 font-semibold transition-colors hover:bg-red-500/10 rounded-lg"
-                >
-                  🗑 מחק
-                </button>
-                <button
-                  onClick={() => setViewingEntry(null)}
-                  className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
-                >
-                  חזור
-                </button>
+          <div className="w-full space-y-8 animate-in fade-in slide-in-from-top-4">
+            {/* Header with Call Metadata */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-4xl font-black bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-1">
+                    פרטי הקלטה
+                  </h2>
+                  <p className="text-sm text-slate-400">
+                    📅 {formatDate(viewingEntry.timestamp)} | ⏱️ {Math.floor(viewingEntry.duration / 60).toString().padStart(2, '0')}:{(viewingEntry.duration % 60).toString().padStart(2, '0')} | 🗣️ {viewingEntry.language === 'he' ? 'עברית' : 'אנגלית'}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => deleteEntry(viewingEntry.id)}
+                    className="px-3 py-2 text-red-400 hover:text-red-300 font-semibold transition-colors hover:bg-red-500/10 rounded-lg"
+                  >
+                    🗑 מחק
+                  </button>
+                  <button
+                    onClick={() => setViewingEntry(null)}
+                    className="px-3 py-2 text-cyan-400 hover:text-cyan-300 font-semibold transition-colors hover:bg-cyan-500/10 rounded-lg"
+                  >
+                    ← חזור
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Tags Display */}
+            {/* Visual Divider */}
+            <div className="h-px bg-gradient-to-r from-slate-700 via-cyan-500/30 to-slate-700"></div>
+
+            {/* Tags Display with Count */}
             {viewingEntry.tags && viewingEntry.tags.length > 0 && (
-              <section className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">אירועי שיחה</h3>
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📍</span>
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">
+                    אירועי שיחה
+                    <span className="text-cyan-400 ml-2">
+                      ({viewingEntry.tags.filter(t => t.detected).length}/{viewingEntry.tags.length})
+                    </span>
+                  </h3>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {viewingEntry.tags.map(tag => (
                     <div
                       key={tag.id}
                       className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-all ${
                         tag.detected
-                          ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50'
+                          ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50 shadow-sm shadow-cyan-500/20'
                           : 'bg-slate-700/30 text-slate-400 border border-slate-600/50 line-through'
                       }`}
                     >
@@ -325,9 +346,13 @@ const App: React.FC = () => {
 
             {/* Key Points Card */}
             {viewingEntry.keyPoints && viewingEntry.keyPoints.length > 0 && (
-              <section className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">נקודות חזוקות ({viewingEntry.keyPoints.length})</h3>
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">💎</span>
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">
+                    נקודות חזוקות
+                    <span className="text-cyan-400 ml-2">({viewingEntry.keyPoints.length})</span>
+                  </h3>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
                   {viewingEntry.keyPoints.map((kp, idx) => (
@@ -368,32 +393,44 @@ const App: React.FC = () => {
               </section>
             )}
 
-            <section className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
-              <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
+            {/* Summary Section */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📝</span>
+                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">סיכום המפגש</h3>
+              </div>
+              <div className="p-6 bg-gradient-to-br from-cyan-900/25 to-blue-900/25 border border-cyan-500/40 rounded-2xl text-slate-100 leading-relaxed space-y-4">
                 {viewingEntry.summary}
               </div>
             </section>
 
-            <section className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">תמלול מלא</h3>
-              <div className="p-5 bg-slate-900/30 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar font-mono text-sm">
+            {/* Divider */}
+            <div className="h-px bg-gradient-to-r from-slate-700 via-cyan-500/30 to-slate-700"></div>
+
+            {/* Full Transcript Section */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎤</span>
+                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">תמלול מלא</h3>
+              </div>
+              <div className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto custom-scrollbar font-mono text-sm">
                 {renderHighlightedText(viewingEntry.text, activeQuote)}
               </div>
             </section>
 
+            {/* Action Buttons */}
             <div className="flex gap-3 pt-4">
               <button
                 onClick={() => navigator.clipboard.writeText(`${viewingEntry.summary}\n\n${viewingEntry.text}`)}
-                className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
+                className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/30 active:scale-95 flex items-center justify-center gap-2"
               >
-                העתק הכל
+                📋 העתק הכל
               </button>
               <button
                 onClick={() => window.print()}
-                className="flex-1 py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-slate-700/50 text-white rounded-xl font-semibold transition-all duration-200"
+                className="flex-1 py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-cyan-500/10 text-white rounded-xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2"
               >
-                הדפס / PDF
+                🖨️ הדפס / PDF
               </button>
             </div>
           </div>
@@ -458,28 +495,49 @@ const App: React.FC = () => {
           )}
 
           {status === AppState.RESULT && result && (
-            <div className="w-full space-y-6 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-              <div className="flex justify-between items-center border-b border-slate-700 pb-6">
-                <h2 className="text-3xl font-bold text-white">תוצאות התמלול</h2>
-                <button
-                  onClick={reset}
-                  className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
-                >
-                  הקלטה חדשה
-                </button>
+            <div className="w-full space-y-8 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+              {/* Header with Call Metadata */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-4xl font-black bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-1">
+                      תוצאות התמלול
+                    </h2>
+                    <p className="text-sm text-slate-400">
+                      📅 {formatDate(result.timestamp)} | ⏱️ {Math.floor(timer / 60).toString().padStart(2, '0')}:{(timer % 60).toString().padStart(2, '0')} | 🗣️ {result.language === 'he' ? 'עברית' : 'אנגלית'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={reset}
+                    className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors px-4 py-2 hover:bg-slate-700/30 rounded-lg"
+                  >
+                    ↻ הקלטה חדשה
+                  </button>
+                </div>
               </div>
 
-              {/* Tags Display */}
+              {/* Visual Divider */}
+              <div className="h-px bg-gradient-to-r from-slate-700 via-cyan-500/30 to-slate-700"></div>
+
+              {/* Tags Display with Count */}
               {result.tags && result.tags.length > 0 && (
-                <section className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">אירועי שיחה</h3>
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📍</span>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">
+                      אירועי שיחה
+                      <span className="text-cyan-400 ml-2">
+                        ({result.tags.filter(t => t.detected).length}/{result.tags.length})
+                      </span>
+                    </h3>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {result.tags.map(tag => (
                       <div
                         key={tag.id}
                         className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-all ${
                           tag.detected
-                            ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50'
+                            ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/50 shadow-sm shadow-cyan-500/20'
                             : 'bg-slate-700/30 text-slate-400 border border-slate-600/50 line-through'
                         }`}
                       >
@@ -492,9 +550,13 @@ const App: React.FC = () => {
 
               {/* Key Points Card */}
               {result.keyPoints && result.keyPoints.length > 0 && (
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">נקודות חזוקות ({result.keyPoints.length})</h3>
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">💎</span>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">
+                      נקודות חזוקות
+                      <span className="text-cyan-400 ml-2">({result.keyPoints.length})</span>
+                    </h3>
                   </div>
                   <div className="grid grid-cols-1 gap-3">
                     {result.keyPoints.map((kp, idx) => (
@@ -535,32 +597,44 @@ const App: React.FC = () => {
                 </section>
               )}
 
-              <section className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">סיכום המפגש</h3>
-                <div className="p-5 bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border border-cyan-500/30 rounded-2xl text-slate-100 leading-relaxed">
+              {/* Summary Section */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📝</span>
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">סיכום המפגש</h3>
+                </div>
+                <div className="p-6 bg-gradient-to-br from-cyan-900/25 to-blue-900/25 border border-cyan-500/40 rounded-2xl text-slate-100 leading-relaxed space-y-4">
                   {result.summary}
                 </div>
               </section>
 
-              <section className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">תמלול מלא</h3>
-                <div className="p-5 bg-slate-900/30 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto custom-scrollbar font-mono text-sm">
+              {/* Divider */}
+              <div className="h-px bg-gradient-to-r from-slate-700 via-cyan-500/30 to-slate-700"></div>
+
+              {/* Full Transcript Section */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🎤</span>
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">תמלול מלא</h3>
+                </div>
+                <div className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto custom-scrollbar font-mono text-sm">
                   {renderHighlightedText(result.text, activeQuote)}
                 </div>
               </section>
 
+              {/* Action Buttons */}
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={() => navigator.clipboard.writeText(`${result.summary}\n\n${result.text}`)}
-                  className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
+                  className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/30 active:scale-95 flex items-center justify-center gap-2"
                 >
-                  העתק הכל
+                  📋 העתק הכל
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="flex-1 py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-slate-700/50 text-white rounded-xl font-semibold transition-all duration-200"
+                  className="flex-1 py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-cyan-500/10 text-white rounded-xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2"
                 >
-                  הדפס / PDF
+                  🖨️ הדפס / PDF
                 </button>
               </div>
             </div>
