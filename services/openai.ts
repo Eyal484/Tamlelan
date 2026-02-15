@@ -9,8 +9,9 @@ export const transcribeAudioOpenAI = async (blob: Blob, mimeType: string): Promi
 
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('model', 'whisper-1');
+  formData.append('model', 'gpt-4o-mini-transcribe');
   formData.append('language', 'he');
+  formData.append('timestamp_granularities', 'segment');
 
   // CRITICAL: Do NOT set Content-Type header — fetch sets it automatically
   // with the correct multipart boundary when body is FormData
