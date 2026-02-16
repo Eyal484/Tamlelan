@@ -155,6 +155,19 @@ const App: React.FC = () => {
     }
   };
 
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && status === AppState.RECORDING) {
+      mediaRecorderRef.current.stop();
+      // Fix: Explicitly use window.clearInterval
+      if (intervalRef.current) window.clearInterval(intervalRef.current);
+      // Stop all tracks to release hardware
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      // Clear the chunks and reset
+      audioChunksRef.current = [];
+      reset();
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -565,6 +578,12 @@ const App: React.FC = () => {
                 </svg>
               </button>
               <p className="font-bold text-xl text-white">סיים הקלטה ותמלל</p>
+              <button
+                onClick={cancelRecording}
+                className="mt-2 py-2 px-6 border border-red-500/50 hover:border-red-500 hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-xl font-semibold transition-all active:scale-95"
+              >
+                ✕ בטל הקלטה
+              </button>
             </div>
           )}
 
@@ -590,12 +609,15 @@ const App: React.FC = () => {
               <div className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto custom-scrollbar font-mono text-sm text-right">
                 {transcribedText}
               </div>
-              <div className="flex gap-3">
-                <button onClick={handleAnalyze} className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+              <div className="flex gap-3 flex-wrap">
+                <button onClick={handleAnalyze} className="flex-1 min-w-32 py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
                   🔍 נתח שיחה
                 </button>
-                <button onClick={reset} className="py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-cyan-500/10 text-white rounded-xl font-semibold transition-all active:scale-95">
+                <button onClick={reset} className="flex-1 min-w-32 py-3 px-4 border border-slate-600 hover:border-cyan-500 hover:bg-cyan-500/10 text-white rounded-xl font-semibold transition-all active:scale-95">
                   ↻ הקלטה חדשה
+                </button>
+                <button onClick={() => { setTranscribedText(null); reset(); }} className="py-3 px-4 border border-red-500/50 hover:border-red-500 hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-xl font-semibold transition-all active:scale-95">
+                  🗑 בטל
                 </button>
               </div>
             </div>
