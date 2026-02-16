@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [viewingEntry, setViewingEntry] = useState<HistoryEntry | null>(null);
   const [activeQuote, setActiveQuote] = useState<string | null>(null);
   const [transcribedText, setTranscribedText] = useState<string | null>(null);
+  const [dualAudioMode, setDualAudioMode] = useState<boolean>(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -53,39 +54,50 @@ const App: React.FC = () => {
 
       let combinedStream: MediaStream;
 
-      try {
-        // Try to capture system audio (other party in call) via display media
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { width: 1, height: 1 } as any,
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        } as any);
+      if (dualAudioMode) {
+        try {
+          // Try to capture system audio (other party in call) via display media
+          const displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { width: 1, height: 1 } as any,
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          } as any);
 
-        // Also capture microphone (your voice)
-        const micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: true
-          }
-        });
+          // Also capture microphone (your voice)
+          const micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: true
+            }
+          });
 
-        // Merge both streams using Web Audio API
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const dest = audioCtx.createMediaStreamDestination();
+          // Merge both streams using Web Audio API
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const dest = audioCtx.createMediaStreamDestination();
 
-        const source1 = audioCtx.createMediaStreamSource(displayStream);
-        const source2 = audioCtx.createMediaStreamSource(micStream);
+          const source1 = audioCtx.createMediaStreamSource(displayStream);
+          const source2 = audioCtx.createMediaStreamSource(micStream);
 
-        source1.connect(dest);
-        source2.connect(dest);
+          source1.connect(dest);
+          source2.connect(dest);
 
-        combinedStream = dest.stream;
-      } catch (e) {
-        console.warn("Could not capture system audio, falling back to microphone only.", e);
+          combinedStream = dest.stream;
+        } catch (e) {
+          console.warn("Could not capture system audio, falling back to microphone only.", e);
+          combinedStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
+        }
+      } else {
+        // Microphone only mode
         combinedStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
@@ -472,16 +484,50 @@ const App: React.FC = () => {
 
           {status === AppState.IDLE && (
             <div className="text-center space-y-8 py-8">
-              <div className="bg-slate-900/50 border border-cyan-500/30 p-6 rounded-2xl text-slate-200 text-sm">
-                <p className="font-bold mb-3 text-white">הנחיות להקלטת שיחה:</p>
-                <ul className="list-disc list-inside text-right space-y-2">
-                  <li>לחץ על כפתור ההקלטה</li>
-                  <li>בחלון השיתוף: בחר את המקור (טאב, חלון או מסך) ו<span className="font-semibold text-cyan-300">בחר "שתף אודיו"</span></li>
-                  <li>אשר גישה למיקרופון כשתתבקש</li>
-                  <li>התחל לדבר - ההקלטה תתחיל באופן אוטומטי</li>
-                  <li>אם ההקלטה לא מופיעה, יתחול ההקלטה מהמיקרופון בלבד</li>
-                </ul>
+              {/* Mode Selection */}
+              <div className="flex gap-4 justify-center mb-6">
+                <button
+                  onClick={() => setDualAudioMode(false)}
+                  className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                    !dualAudioMode
+                      ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/30'
+                      : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  🎤 מיקרופון בלבד
+                </button>
+                <button
+                  onClick={() => setDualAudioMode(true)}
+                  className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                    dualAudioMode
+                      ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/30'
+                      : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  🔊 שני הצדדים
+                </button>
               </div>
+
+              {/* Instructions based on mode */}
+              <div className="bg-slate-900/50 border border-cyan-500/30 p-6 rounded-2xl text-slate-200 text-sm">
+                <p className="font-bold mb-3 text-white">הנחיות:</p>
+                {!dualAudioMode ? (
+                  <ul className="list-disc list-inside text-right space-y-2">
+                    <li>לחץ על כפתור ההקלטה</li>
+                    <li>אשר גישה למיקרופון</li>
+                    <li>התחל לדבר - ההקלטה תתחיל באופן אוטומטי</li>
+                  </ul>
+                ) : (
+                  <ul className="list-disc list-inside text-right space-y-2">
+                    <li>לחץ על כפתור ההקלטה</li>
+                    <li>בחלון השיתוף: בחר את המקור שלך (טאב, חלון או מסך)</li>
+                    <li><span className="font-semibold text-cyan-300">בחר "שתף אודיו"</span> כדי לתמלל את הצד השני</li>
+                    <li>אשר גישה למיקרופון כשתתבקש</li>
+                    <li>התחל לדבר - ההקלטה תתחיל באופן אוטומטי</li>
+                  </ul>
+                )}
+              </div>
+
               <div className="flex flex-col items-center gap-6">
                 <button
                   onClick={startRecording}
