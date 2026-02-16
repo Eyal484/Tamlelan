@@ -3,6 +3,14 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { AppState, TranscriptionResult, HistoryEntry } from './types';
 import { transcribeAudioGemini, analyzeTranscription } from './services/gemini';
 
+const CALL_TYPES = [
+  { id: 'performance_check', label: 'בדיקת ביצועים' },
+  { id: 'renewal', label: 'חידוש/הזמנה חוזרת' },
+  { id: 'new_prospect', label: 'לקוח חדש' },
+  { id: 'follow_up', label: 'עקיבה על הצעה' },
+  { id: 'reminder', label: 'תזכורת לשימוש' }
+];
+
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -14,6 +22,13 @@ const App: React.FC = () => {
   const [activeQuote, setActiveQuote] = useState<string | null>(null);
   const [transcribedText, setTranscribedText] = useState<string | null>(null);
   const [dualAudioMode, setDualAudioMode] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [recordingContext, setRecordingContext] = useState<string>('');
+  const [showContextInput, setShowContextInput] = useState<boolean>(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [lastFailedOperation, setLastFailedOperation] = useState<{ type: string; data?: any } | null>(null);
+  const [selectedCallType, setSelectedCallType] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -31,6 +46,33 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if user is typing in input/textarea/contenteditable
+      const target = e.target as HTMLElement;
+      const isEditable =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true';
+
+      // Enter: Start recording (only in IDLE state, not in input)
+      if (e.key === 'Enter' && status === AppState.IDLE && !isEditable) {
+        e.preventDefault();
+        startRecording();
+      }
+
+      // Esc: Cancel recording
+      if (e.key === 'Escape' && status === AppState.RECORDING) {
+        e.preventDefault();
+        cancelRecording();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [status]);
+
   // Helper to format timestamp for display
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -41,7 +83,11 @@ const App: React.FC = () => {
   const deleteEntry = (id: string) => {
     setHistory(prev => {
       const updated = prev.filter(e => e.id !== id);
-      localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+      try {
+        localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+      } catch (e) {
+        console.error("Failed to save to localStorage:", e);
+      }
       return updated;
     });
     if (viewingEntry?.id === id) setViewingEntry(null);
@@ -116,18 +162,12 @@ const App: React.FC = () => {
         }
       };
 
-      recorder.onstop = async () => {
-        setStatus(AppState.PROCESSING);
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
-        try {
-          const text = await transcribeAudioGemini(audioBlob, 'audio/webm');
-          setTranscribedText(text);
-          setStatus(AppState.TRANSCRIBED);
-        } catch (err: any) {
-          setErrorMessage(err.message || "שגיאה בתמלול");
-          setStatus(AppState.ERROR);
-        }
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+        setStatus(AppState.RECORDED);
       };
 
       recorder.start();
@@ -174,7 +214,7 @@ const App: React.FC = () => {
     setErrorMessage(null);
     setStatus(AppState.PROCESSING);
     try {
-      const text = await transcribeAudioGemini(file, file.type);
+      const text = await transcribeAudioGemini(file, file.type, false);
       setTranscribedText(text);
       setStatus(AppState.TRANSCRIBED);
     } catch (err: any) {
@@ -184,18 +224,46 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleTranscribe = async () => {
+    if (!audioBlob) return;
+    setErrorMessage(null);
+    setStatus(AppState.PROCESSING);
+    try {
+      const text = await transcribeAudioGemini(audioBlob, 'audio/webm', dualAudioMode);
+      setTranscribedText(text);
+      setStatus(AppState.TRANSCRIBED);
+      setLastFailedOperation(null);
+    } catch (err: any) {
+      let message = "שגיאה בתמלול";
+      if (err.message.includes('network')) {
+        message = "בעיית חיבור. בדוק את החיבור לאינטרנט.";
+      } else if (err.message.includes('timeout')) {
+        message = "הבקשה הלכה לזמן. נסה שוב בעוד דקה.";
+      } else if (err.message.includes('format')) {
+        message = "קובץ אודיו לא תקין. נסה בפורמט שונה.";
+      }
+      setErrorMessage(message);
+      setStatus(AppState.ERROR);
+      setLastFailedOperation({ type: 'transcribe' });
+    }
+  };
+
   const handleAnalyze = async () => {
     if (!transcribedText) return;
     setStatus(AppState.ANALYZING);
     try {
-      const analysis = await analyzeTranscription(transcribedText);
+      const analysis = await analyzeTranscription(transcribedText, recordingContext, selectedCallType);
       setResult({
         text: transcribedText,
         summary: analysis.summary,
         language: 'he',
         timestamp: new Date().toISOString(),
         tags: analysis.tags,
-        keyPoints: analysis.keyPoints
+        keyPoints: analysis.keyPoints,
+        context: recordingContext || undefined,
+        callType: selectedCallType || undefined,
+        email: analysis.email,
+        crmNote: analysis.crmNote
       });
       const newEntry: HistoryEntry = {
         id: crypto.randomUUID(),
@@ -205,17 +273,35 @@ const App: React.FC = () => {
         timestamp: new Date().toISOString(),
         duration: timer,
         tags: analysis.tags,
-        keyPoints: analysis.keyPoints
+        keyPoints: analysis.keyPoints,
+        context: recordingContext || undefined,
+        callType: selectedCallType || undefined,
+        crmNote: analysis.crmNote
       };
       setHistory(prev => {
         const updated = [newEntry, ...prev];
-        localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+        try {
+          localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+        } catch (e) {
+          console.error("Failed to save to localStorage:", e);
+          setErrorMessage("זיכרון התקן מלא. לא ניתן לשמור את ההקלטה.");
+          setStatus(AppState.ERROR);
+          return prev;
+        }
         return updated;
       });
       setStatus(AppState.RESULT);
+      setLastFailedOperation(null);
     } catch (err: any) {
-      setErrorMessage(err.message || "שגיאה בניתוח");
+      let message = "שגיאה בניתוח";
+      if (err.message.includes('network')) {
+        message = "בעיית חיבור. בדוק את החיבור לאינטרנט.";
+      } else if (err.message.includes('timeout')) {
+        message = "הבקשה הלכה לזמן. נסה שוב בעוד דקה.";
+      }
+      setErrorMessage(message);
       setStatus(AppState.ERROR);
+      setLastFailedOperation({ type: 'analyze' });
     }
   };
 
@@ -226,12 +312,29 @@ const App: React.FC = () => {
   };
 
   const reset = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
     setStatus(AppState.IDLE);
     setResult(null);
     setErrorMessage(null);
     setTimer(0);
     setActiveQuote(null);
     setTranscribedText(null);
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setRecordingContext('');
+    setShowContextInput(false);
+    setLastFailedOperation(null);
+    setSelectedCallType(null);
+  };
+
+  const retryLastOperation = async () => {
+    if (!lastFailedOperation) return;
+
+    if (lastFailedOperation.type === 'transcribe' && audioBlob) {
+      await handleTranscribe();
+    } else if (lastFailedOperation.type === 'analyze' && transcribedText) {
+      await handleAnalyze();
+    }
   };
 
   // Helper to render text with highlighted quote
@@ -253,6 +356,59 @@ const App: React.FC = () => {
         ))}
       </>
     );
+  };
+
+  // Helper to export history as CSV
+  const exportHistoryAsCSV = () => {
+    if (history.length === 0) {
+      setErrorMessage("אין הקלטות להורדה");
+      return;
+    }
+
+    // Helper function to properly escape CSV fields
+    const escapeCSVField = (field: string | undefined): string => {
+      if (!field) return '';
+      const fieldStr = String(field);
+      // If field contains comma, quote, or newline, wrap in quotes and escape internal quotes
+      if (fieldStr.includes(',') || fieldStr.includes('"') || fieldStr.includes('\n')) {
+        return `"${fieldStr.replace(/"/g, '""')}"`;
+      }
+      return fieldStr;
+    };
+
+    const headers = ['תאריך', 'משך', 'סיכום', 'תגיות', 'הקשר', 'סוג שיחה', 'הערת CRM'];
+    const rows = history.map(entry => {
+      const callTypeLabel = CALL_TYPES.find(t => t.id === entry.callType)?.label || '';
+      return [
+        escapeCSVField(formatDate(entry.timestamp)),
+        escapeCSVField(`${Math.floor(entry.duration / 60).toString().padStart(2, '0')}:${(entry.duration % 60).toString().padStart(2, '0')}`),
+        escapeCSVField(entry.summary),
+        escapeCSVField(entry.tags?.map(t => (t.detected ? t.label : '')).filter(t => t).join(', ')),
+        escapeCSVField(entry.context),
+        escapeCSVField(callTypeLabel),
+        escapeCSVField(entry.crmNote)
+      ];
+    });
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `tamlelan_history_${dateStr}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Cleanup: revoke the object URL to prevent memory leak
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 100);
   };
 
   return (
@@ -279,51 +435,108 @@ const App: React.FC = () => {
           <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
             <div className="flex justify-between items-center border-b border-slate-700 pb-6">
               <h2 className="text-3xl font-bold text-white">הקלטות קודמות</h2>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
-              >
-                חזור
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={exportHistoryAsCSV}
+                  className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors px-3 py-1 hover:bg-green-500/10 rounded-lg"
+                  title="הורד כ-CSV"
+                >
+                  📥 ייצוא
+                </button>
+                <button
+                  onClick={() => {
+                    setShowHistory(false);
+                    setSearchQuery('');
+                  }}
+                  className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
+                >
+                  חזור
+                </button>
+              </div>
             </div>
 
-            {history.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <p className="text-lg">אין הקלטות שמורות</p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-                {history.map(entry => (
-                  <div
-                    key={entry.id}
-                    onClick={() => setViewingEntry(entry)}
-                    className="p-4 border border-slate-600/30 rounded-xl hover:border-cyan-500/50 hover:bg-slate-700/30 cursor-pointer transition-all duration-200 group"
-                  >
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="flex-1 text-right">
-                        <p className="font-semibold text-white line-clamp-2 group-hover:text-cyan-300 transition-colors">
-                          {entry.summary.substring(0, 80)}
-                          {entry.summary.length > 80 ? '...' : ''}
-                        </p>
-                        <p className="text-sm text-slate-400 mt-2">{formatDate(entry.timestamp)}</p>
-                        <p className="text-xs text-slate-500 mt-1 font-mono">
-                          {Math.floor(entry.duration / 60).toString().padStart(2, '0')}:{(entry.duration % 60).toString().padStart(2, '0')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteEntry(entry.id);
-                        }}
-                        className="p-2 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all duration-200"
-                      >
-                        🗑
-                      </button>
-                    </div>
+            {/* Search Input */}
+            <input
+              type="text"
+              placeholder="חפש בהקלטות..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 text-right focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+            />
+
+            {(() => {
+              const filteredHistory = history.filter(entry => {
+                const query = searchQuery.toLowerCase();
+                const callTypeLabel = CALL_TYPES.find(t => t.id === entry.callType)?.label || '';
+                return (
+                  entry.summary.toLowerCase().includes(query) ||
+                  entry.text.toLowerCase().includes(query) ||
+                  (entry.tags?.some(t => t.label.toLowerCase().includes(query)) ?? false) ||
+                  ((entry.context?.toLowerCase() ?? '').includes(query)) ||
+                  callTypeLabel.toLowerCase().includes(query)
+                );
+              });
+
+              if (filteredHistory.length === 0 && history.length === 0) {
+                return (
+                  <div className="text-center py-12 text-slate-400">
+                    <p className="text-lg">אין הקלטות שמורות</p>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+
+              if (filteredHistory.length === 0 && searchQuery) {
+                return (
+                  <div className="text-center py-12 text-slate-400">
+                    <p className="text-lg">לא נמצאו תוצאות</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+                  {filteredHistory.map(entry => {
+                    const callTypeLabel = CALL_TYPES.find(t => t.id === entry.callType)?.label;
+                    return (
+                      <div
+                        key={entry.id}
+                        onClick={() => setViewingEntry(entry)}
+                        className="p-4 border border-slate-600/30 rounded-xl hover:border-cyan-500/50 hover:bg-slate-700/30 cursor-pointer transition-all duration-200 group"
+                      >
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex-1 text-right">
+                            <p className="font-semibold text-white line-clamp-2 group-hover:text-cyan-300 transition-colors">
+                              {entry.summary.substring(0, 80)}
+                              {entry.summary.length > 80 ? '...' : ''}
+                            </p>
+                            <div className="flex gap-2 mt-2 items-center justify-end">
+                              <p className="text-sm text-slate-400">{formatDate(entry.timestamp)}</p>
+                              {callTypeLabel && (
+                                <span className="px-2 py-1 bg-cyan-500/30 text-cyan-200 text-xs rounded-full font-semibold">
+                                  {callTypeLabel}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1 font-mono">
+                              {Math.floor(entry.duration / 60).toString().padStart(2, '0')}:{(entry.duration % 60).toString().padStart(2, '0')}
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteEntry(entry.id);
+                            }}
+                            className="p-2 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all duration-200"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -340,6 +553,54 @@ const App: React.FC = () => {
                   <p className="text-sm text-slate-400">
                     📅 {formatDate(viewingEntry.timestamp)} | ⏱️ {Math.floor(viewingEntry.duration / 60).toString().padStart(2, '0')}:{(viewingEntry.duration % 60).toString().padStart(2, '0')} | 🗣️ {viewingEntry.language === 'he' ? 'עברית' : 'אנגלית'}
                   </p>
+                  {/* Call Type with Edit Option */}
+                  <div className="mt-3 p-3 rounded-lg border border-slate-600/50 bg-slate-700/40 text-right">
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        onClick={() => {
+                          const validIds = CALL_TYPES.map(t => t.id).join(', ');
+                          const prompt_msg = `סוג שיחה חדש (${validIds} או השאר ריק):\n\nנוכחי: ${viewingEntry.callType || '(לא מוגדר)'}`;
+                          const newType = prompt(prompt_msg, viewingEntry.callType || '');
+
+                          if (newType !== null) {
+                            const validType = CALL_TYPES.find(t => t.id === newType) || newType === '';
+                            if (validType) {
+                              setViewingEntry({ ...viewingEntry, callType: newType || undefined });
+                              setHistory(prev => {
+                                const updated = prev.map(e =>
+                                  e.id === viewingEntry.id ? { ...e, callType: newType || undefined } : e
+                                );
+                                try {
+                                  localStorage.setItem('calltranscribe_history', JSON.stringify(updated));
+                                } catch (e) {
+                                  console.error("Failed to save to localStorage:", e);
+                                }
+                                return updated;
+                              });
+                            } else {
+                              alert(`סוג שיחה לא חוקי. אפשרויות תקינות: ${validIds}`);
+                            }
+                          }
+                        }}
+                        className="text-xs px-2 py-1 rounded bg-slate-600/50 hover:bg-cyan-500/30 text-cyan-300 font-semibold transition-all"
+                      >
+                        ✎ עדכן
+                      </button>
+                      <div>
+                        <span className="font-semibold text-cyan-400">סוג שיחה:</span> {CALL_TYPES.find(t => t.id === viewingEntry.callType)?.label || viewingEntry.callType || '—'}
+                      </div>
+                    </div>
+                  </div>
+                  {viewingEntry.context && (
+                    <p className="text-sm text-slate-300 mt-3 bg-slate-700/40 p-3 rounded-lg text-right border border-slate-600/50">
+                      <span className="font-semibold text-cyan-400">הקשר:</span> {viewingEntry.context}
+                    </p>
+                  )}
+                  {viewingEntry.crmNote && (
+                    <p className="text-sm text-slate-300 mt-3 bg-slate-700/40 p-3 rounded-lg text-right border border-slate-600/50">
+                      <span className="font-semibold text-cyan-400">CRM:</span> {viewingEntry.crmNote}
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -521,6 +782,45 @@ const App: React.FC = () => {
                 </button>
               </div>
 
+              {/* Context Input - Collapsible */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowContextInput(!showContextInput)}
+                  className="text-sm text-cyan-400 hover:text-cyan-300 font-semibold transition-colors"
+                >
+                  {showContextInput ? '▼' : '▶'} הוסף הקשר
+                </button>
+                {showContextInput && (
+                  <textarea
+                    placeholder="הקשר של השיחה (אופציונלי)..."
+                    value={recordingContext}
+                    onChange={(e) => setRecordingContext(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 text-right focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 resize-none"
+                    rows={3}
+                  />
+                )}
+              </div>
+
+              {/* Call Type Selection */}
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-300">סוג השיחה:</p>
+                <div className="space-y-2">
+                  {CALL_TYPES.map(type => (
+                    <label key={type.id} className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-700/30 transition-colors">
+                      <input
+                        type="radio"
+                        name="callType"
+                        value={type.id}
+                        checked={selectedCallType === type.id}
+                        onChange={(e) => setSelectedCallType(e.target.value)}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-white text-sm">{type.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* Instructions based on mode */}
               <div className="bg-slate-900/50 border border-cyan-500/30 p-6 rounded-2xl text-slate-200 text-sm">
                 <p className="font-bold mb-3 text-white">הנחיות:</p>
@@ -587,6 +887,31 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {status === AppState.RECORDED && audioUrl && (
+            <div className="text-center space-y-6 py-8">
+              <h2 className="text-2xl font-bold text-white">ההקלטה עומדת להשמעה</h2>
+              <audio
+                controls
+                src={audioUrl}
+                className="w-full max-w-md mx-auto bg-slate-700 rounded-lg"
+              />
+              <div className="flex gap-3 flex-wrap justify-center">
+                <button
+                  onClick={handleTranscribe}
+                  className="py-3 px-6 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                >
+                  🔤 תמלל
+                </button>
+                <button
+                  onClick={reset}
+                  className="py-3 px-6 border border-red-500/50 hover:border-red-500 hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-xl font-semibold transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  🗑 בטל
+                </button>
+              </div>
+            </div>
+          )}
+
           {status === AppState.PROCESSING && (
             <div className="text-center space-y-6 py-12">
               <div className="flex justify-center">
@@ -606,6 +931,24 @@ const App: React.FC = () => {
                 <h2 className="text-2xl font-bold text-white">תמלול הושלם</h2>
                 <span className="text-green-400 text-sm font-semibold">✓ מוכן לניתוח</span>
               </div>
+
+              {!selectedCallType && (
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <p className="text-sm text-amber-300 mb-3">בחר סוג שיחה לניתוח מדויק יותר:</p>
+                  <div className="space-y-2">
+                    {CALL_TYPES.map(type => (
+                      <button
+                        key={type.id}
+                        onClick={() => setSelectedCallType(type.id)}
+                        className="w-full text-right py-2 px-3 text-sm bg-slate-700/50 hover:bg-amber-500/20 text-white rounded-lg transition-all"
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto custom-scrollbar font-mono text-sm text-right">
                 {transcribedText}
               </div>
@@ -648,6 +991,11 @@ const App: React.FC = () => {
                     <p className="text-sm text-slate-400">
                       📅 {formatDate(result.timestamp)} | ⏱️ {Math.floor(timer / 60).toString().padStart(2, '0')}:{(timer % 60).toString().padStart(2, '0')} | 🗣️ {result.language === 'he' ? 'עברית' : 'אנגלית'}
                     </p>
+                    {result.context && (
+                      <p className="text-sm text-slate-300 mt-3 bg-slate-700/40 p-3 rounded-lg text-right border border-slate-600/50">
+                        <span className="font-semibold text-cyan-400">הקשר:</span> {result.context}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={reset}
@@ -660,6 +1008,38 @@ const App: React.FC = () => {
 
               {/* Visual Divider */}
               <div className="h-px bg-gradient-to-r from-slate-700 via-cyan-500/30 to-slate-700"></div>
+
+              {/* Email Suggestion */}
+              {result.email && result.email.trim() && (
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📧</span>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">הצעת דוא"ל</h3>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-blue-900/25 to-purple-900/25 border border-blue-500/40 rounded-2xl text-slate-100 leading-relaxed text-right">
+                    {result.email}
+                  </div>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(result.email || '')}
+                    className="w-full py-2 px-3 text-sm bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 rounded-lg font-semibold transition-all"
+                  >
+                    📋 העתק דוא"ל
+                  </button>
+                </section>
+              )}
+
+              {/* CRM Note */}
+              {result.crmNote && result.crmNote.trim() && (
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📝</span>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">הערה לניהול קשרים</h3>
+                  </div>
+                  <div className="p-4 bg-slate-700/40 border border-slate-600/50 rounded-2xl text-slate-200 text-right">
+                    {result.crmNote}
+                  </div>
+                </section>
+              )}
 
               {/* Tags Display with Count */}
               {result.tags && result.tags.length > 0 && (
@@ -788,12 +1168,22 @@ const App: React.FC = () => {
                 <p className="font-bold mb-2 text-red-200 text-lg">אופס! משהו השתבש</p>
                 <p className="text-sm text-red-300">{errorMessage}</p>
               </div>
-              <button
-                onClick={reset}
-                className="py-3 px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
-              >
-                נסה שוב
-              </button>
+              <div className="flex gap-3 justify-center flex-wrap">
+                {lastFailedOperation && (
+                  <button
+                    onClick={retryLastOperation}
+                    className="py-3 px-8 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-amber-500/25"
+                  >
+                    🔄 נסה שוב
+                  </button>
+                )}
+                <button
+                  onClick={reset}
+                  className="py-3 px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
+                >
+                  ↻ התחל מחדש
+                </button>
+              </div>
             </div>
           )}
 

@@ -22,10 +22,10 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-export const transcribeAudioGemini = async (blob: Blob, mimeType: string): Promise<string> => {
+export const transcribeAudioGemini = async (blob: Blob, mimeType: string, dualAudioMode: boolean = false): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const transcriptionPrompt = `אתה מהנדס תמלול מקצועי. המשימה היחידה שלך היא לתמלל את השיחה בדיוק מוחלט.
+  let transcriptionPrompt = `אתה מהנדס תמלול מקצועי. המשימה היחידה שלך היא לתמלל את השיחה בדיוק מוחלט.
 
 הנחיות קריטיות:
 1. תמלל כל מילה שנאמרה - אל תדלג או תשנה מילים
@@ -33,7 +33,14 @@ export const transcribeAudioGemini = async (blob: Blob, mimeType: string): Promi
 3. מחירים ומספרים: כל סכום או מספר חייב להיות מדויק לחלוטין - זה קריטי!
 4. תאריכים וזמנים: כתוב בצורה ברורה
 5. אל תנסה לסכם או לתקן - רק תמלל
-6. אם יש חלקים שלא ברורים, ציין [לא ברור] במקום להשמיץ
+6. אם יש חלקים שלא ברורים, ציין [לא ברור] במקום להשמיץ`;
+
+  if (dualAudioMode) {
+    transcriptionPrompt += `
+7. סמן כל קו דיבור כ-אני: (מיק' ראשי / מוכר) או לקוח: (אודיו מוצג / לקוח). השתמש ב-[?]: אם אתה לא בטוח.`;
+  }
+
+  transcriptionPrompt += `
 
 השתמש בשפה עברית או באנגלית לפי השיחה.
 
@@ -80,19 +87,83 @@ export const transcribeAudioGemini = async (blob: Blob, mimeType: string): Promi
   }
 };
 
-export const analyzeTranscription = async (text: string): Promise<{
+export const analyzeTranscription = async (text: string, context?: string, callType?: string): Promise<{
   summary: string;
   tags: ConversationTag[];
   keyPoints: KeyPoint[];
+  email: string;
+  crmNote: string;
 }> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+  let contextBlock = '';
+  if (context) {
+    contextBlock = `הקשר הטלפון:
+${context}
+
+`;
+  }
+
+  // Type-specific instructions and focus areas
+  let typeSpecificInstructions = '';
+  let emailTemplate = '';
+
+  if (callType === 'performance_check') {
+    typeSpecificInstructions = `
+זהה במיוחד:
+- ביצועי המודעה (טוב/רע)
+- בעיה ספציפית (מעט מועמדים/לא רלוונטיים/אחר)
+- סימני כניסה למחזור חידוש (האם פתוח לשדרוג?)
+
+עבור ה-email: הצע שדרוג או חבילה משופרת שתפתור את הבעיה.`;
+    emailTemplate = 'שדרוג_מחזור';
+  } else if (callType === 'renewal') {
+    typeSpecificInstructions = `
+זהה במיוחד:
+- מה קנו בעבר (חבילות, זמן)
+- צורך נוכחי בהקלטות (כן/אולי/לא)
+- סימני תקציב זמין
+
+עבור ה-email: הזכר את הרכישה הקודמת ותוצאותיה, הצע אותה חבילה או משופרת.`;
+    emailTemplate = 'חידוש_חבילה';
+  } else if (callType === 'new_prospect') {
+    typeSpecificInstructions = `
+זהה במיוחד:
+- צרכי הקבלת עבודה (תפקידים ספציפיים, דחיפות)
+- גודל חברה / תעשייה
+- טווח תקציב (אם צוין)
+
+עבור ה-email: הצע חבילה מותאמת לצרכיהם.`;
+    emailTemplate = 'הצעה_חדשה';
+  } else if (callType === 'follow_up') {
+    typeSpecificInstructions = `
+זהה במיוחד:
+- ההתנגדות העיקרית (מחיר/רלוונטיות/זמן/אחר)
+- רמת עניין (עדיין מעוניין/חם/דלדל)
+- מה יגרום להם לומר כן
+
+עבור ה-email: התייחס להתנגדות ספציפית או הצע טיון בהצעה.`;
+    emailTemplate = 'פתרון_התנגדות';
+  } else if (callType === 'reminder') {
+    typeSpecificInstructions = `
+זהה במיוחד:
+- כוונה להשתמש בהקלטות הנותרות (חזקה/חלשה/אפס)
+- פתיחות משרה כרגע (כן/לא)
+- סיכון אובדן התקציב (האם להם מתחייבות?)
+
+עבור ה-email: תזכורת על הערך שנותר, דחיפות (תאריך תפוגה?), צעד קל הבא.`;
+    emailTemplate = 'תזכורת_שימוש';
+  }
+
   const summaryPrompt = `אתה עוזר מקצועי לניתוח שיחות מכירות עבור דרושים IL (אתר מודעות עבודה בישראל). על בסיס התמלול שלהלן, ספק סיכום מדויק, זהה אירועי שיחה וחלץ נקודות חשובות.
 
-התמלול:
+${contextBlock}התמלול:
 ${text}
 
-סיכום יוקד על:
+סוג השיחה: ${callType || 'לא מוגדר'}
+${typeSpecificInstructions}
+
+סיכום כללי יוקד על:
 - שמות הלקוח והמוכר (מהתמלול)
 - חבילות משרות/שירותים שנדונו ומחיריהן
 - מחירים ותנאים בדיוק כמו בשיחה
@@ -108,6 +179,10 @@ ${text}
 
 נקודות חשובות: חלץ עד 5 נקודות חזוקות מהשיחה (כמו חבילות משרות, מחירים, החלטות). עבור כל נקודה, ספק את התווית (label) וציטוט מדויק מהתמלול (quote) שמתאים לנקודה זו.
 
+ה-email צריך להיות 20-50 מילים בעברית, קלאסי ומקצועי. כולל CTA מתאים (קבע שיחה/אישור/קבלת הצעה וכו').
+
+CRM note צריך להיות 5-12 מילים בעברית המתאר את ממצאי השיחה.
+
 החזר את הנתונים בתוך JSON:
 {
   "summary": "סיכום מכירות כאן...",
@@ -119,7 +194,9 @@ ${text}
   },
   "key_points": [
     { "label": "חבילת 10 משרות ב-4000₪", "quote": "exact quote from transcript" }
-  ]
+  ],
+  "email": "full Hebrew email text here (20-50 words)",
+  "crm_note": "5-12 word summary in Hebrew"
 }`;
 
   try {
@@ -158,15 +235,19 @@ ${text}
                 },
                 required: ["label", "quote"]
               }
-            }
+            },
+            email: { type: Type.STRING },
+            crm_note: { type: Type.STRING }
           },
-          required: ["summary", "tags", "key_points"]
+          required: ["summary", "tags", "key_points", "email", "crm_note"]
         }
       }
     });
 
     const result = JSON.parse(response.text || "{}");
     const summary = result.summary || "לא ניתן היה להפיק סיכום.";
+    const email = (result.email && result.email.trim()) ? result.email.trim() : "";
+    const crmNote = ((result.crm_note || result.crmNote) && (result.crm_note || result.crmNote).trim()) ? (result.crm_note || result.crmNote).trim() : "";
 
     const tagsObj = result.tags || {};
     const tags: ConversationTag[] = TAGS_META.map(meta => ({
@@ -180,7 +261,7 @@ ${text}
       quote: kp.quote || ""
     }));
 
-    return { summary, tags, keyPoints };
+    return { summary, tags, keyPoints, email, crmNote };
   } catch (error) {
     console.error("Analysis error:", error);
     throw new Error("נכשלה פעולת הניתוח. נסה שוב.");

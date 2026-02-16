@@ -17,6 +17,10 @@ export interface TranscriptionResult {
   timestamp: string;
   tags?: ConversationTag[];
   keyPoints?: KeyPoint[];
+  context?: string;
+  callType?: string;
+  email?: string;
+  crmNote?: string;
 }
 
 export interface HistoryEntry {
@@ -28,11 +32,15 @@ export interface HistoryEntry {
   duration: number;
   tags?: ConversationTag[];
   keyPoints?: KeyPoint[];
+  context?: string;
+  callType?: string;
+  crmNote?: string;
 }
 
 export enum AppState {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',
+  RECORDED = 'RECORDED',
   PROCESSING = 'PROCESSING',
   TRANSCRIBED = 'TRANSCRIBED',
   ANALYZING = 'ANALYZING',
