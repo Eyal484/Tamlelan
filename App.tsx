@@ -35,6 +35,7 @@ const App: React.FC = () => {
   // Fix: Using number instead of NodeJS.Timeout for browser-based React application
   const intervalRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -72,6 +73,16 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [status]);
+
+  // Auto-scroll to highlighted quote in transcript
+  useEffect(() => {
+    if (activeQuote && transcriptRef.current) {
+      const mark = transcriptRef.current.querySelector('mark');
+      if (mark) {
+        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [activeQuote]);
 
   // Helper to format timestamp for display
   const formatDate = (iso: string) => {
@@ -337,10 +348,9 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper to render text with highlighted quote
-  const renderHighlightedText = (text: string, quote: string | null) => {
+  // Helper to render inline text with highlighted quote
+  const renderInlineHighlight = (text: string, quote: string | null) => {
     if (!quote) return text;
-
     const parts = text.split(quote);
     return (
       <>
@@ -355,6 +365,67 @@ const App: React.FC = () => {
           </React.Fragment>
         ))}
       </>
+    );
+  };
+
+  // Speaker styles
+  const speakerStyles: Record<string, { border: string; badge: string; badgeText: string }> = {
+    'אני:': { border: 'border-l-cyan-400', badge: 'bg-cyan-500/30 text-cyan-200', badgeText: 'אני' },
+    'לקוח:': { border: 'border-l-amber-400', badge: 'bg-amber-500/30 text-amber-200', badgeText: 'לקוח' },
+    '[?]:': { border: 'border-l-slate-500', badge: 'bg-slate-600/30 text-slate-300', badgeText: '?' },
+  };
+
+  // Helper to render text with speaker blocks and highlighted quote
+  const renderHighlightedText = (text: string, quote: string | null) => {
+    // Split on speaker labels, keeping the delimiters
+    const segments = text.split(/(אני:|לקוח:|\[\?\]:)/);
+
+    // If no speaker labels found, fall back to simple highlight
+    if (segments.length <= 1) {
+      return <div className="text-right">{renderInlineHighlight(text, quote)}</div>;
+    }
+
+    // Group into [label, content] pairs
+    const blocks: { label: string; content: string }[] = [];
+    let i = 0;
+
+    // Handle any text before the first speaker label
+    if (segments[0].trim()) {
+      blocks.push({ label: '', content: segments[0] });
+    }
+    i = segments[0].trim() ? 1 : 1;
+
+    for (; i < segments.length; i += 2) {
+      const label = segments[i] || '';
+      const content = segments[i + 1] || '';
+      if (label || content.trim()) {
+        blocks.push({ label, content });
+      }
+    }
+
+    return (
+      <div className="space-y-3">
+        {blocks.map((block, idx) => {
+          const style = speakerStyles[block.label];
+          return (
+            <div
+              key={idx}
+              className={`pr-3 pl-3 py-2 rounded-lg border-l-4 ${
+                style ? style.border : 'border-l-slate-600'
+              } bg-slate-800/40 text-right`}
+            >
+              {style && (
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold mb-1 ${style.badge}`}>
+                  {style.badgeText}
+                </span>
+              )}
+              <p className="leading-relaxed whitespace-pre-wrap">
+                {renderInlineHighlight(block.content, quote)}
+              </p>
+            </div>
+          );
+        })}
+      </div>
     );
   };
 
@@ -666,7 +737,6 @@ const App: React.FC = () => {
                     <button
                       key={idx}
                       onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
-                      onMouseLeave={() => setActiveQuote(null)}
                       className={`group p-4 rounded-xl border transition-all duration-200 text-right cursor-pointer ${
                         activeQuote === kp.quote
                           ? 'bg-gradient-to-br from-cyan-500/40 to-blue-500/40 border-cyan-400/60 shadow-lg shadow-cyan-500/30'
@@ -720,7 +790,7 @@ const App: React.FC = () => {
                 <span className="text-xl">🎤</span>
                 <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">תמלול מלא</h3>
               </div>
-              <div className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto custom-scrollbar font-mono text-sm">
+              <div ref={transcriptRef} className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 leading-relaxed max-h-72 overflow-y-auto custom-scrollbar text-sm">
                 {renderHighlightedText(viewingEntry.text, activeQuote)}
               </div>
             </section>
@@ -1085,7 +1155,6 @@ const App: React.FC = () => {
                       <button
                         key={idx}
                         onClick={() => setActiveQuote(activeQuote === kp.quote ? null : kp.quote)}
-                        onMouseLeave={() => setActiveQuote(null)}
                         className={`group p-4 rounded-xl border transition-all duration-200 text-right cursor-pointer ${
                           activeQuote === kp.quote
                             ? 'bg-gradient-to-br from-cyan-500/40 to-blue-500/40 border-cyan-400/60 shadow-lg shadow-cyan-500/30'
@@ -1139,7 +1208,7 @@ const App: React.FC = () => {
                   <span className="text-xl">🎤</span>
                   <h3 className="text-sm font-bold uppercase tracking-widest text-slate-300">תמלול מלא</h3>
                 </div>
-                <div className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto custom-scrollbar font-mono text-sm">
+                <div ref={transcriptRef} className="p-6 bg-slate-900/40 border border-slate-600/30 rounded-2xl text-slate-200 leading-relaxed max-h-72 overflow-y-auto custom-scrollbar text-sm">
                   {renderHighlightedText(result.text, activeQuote)}
                 </div>
               </section>
