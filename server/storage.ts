@@ -17,6 +17,7 @@ function toCallListItem(call: VoicenterCall): CallListItem {
     queuename: call.queuename || '',
     hasAI: !!(call.aiData && (call.aiData.transcript || call.aiData.insights)),
     hasSummary: !!(call.aiData?.insights?.summary),
+    hasAnalysis: !!call.geminiAnalysis,
   };
 }
 

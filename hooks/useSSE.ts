@@ -4,6 +4,7 @@ import type { CallListItem } from '../types';
 export function useSSE(callbacks: {
   onNewCall?: (call: CallListItem) => void;
   onDeleteCall?: (data: { ivruniqueid: string }) => void;
+  onUpdateCall?: (data: { ivruniqueid: string; hasAnalysis?: boolean }) => void;
 }) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
@@ -26,6 +27,15 @@ export function useSSE(callbacks: {
         callbacksRef.current.onDeleteCall?.(data);
       } catch (err) {
         console.error('[SSE] Error parsing delete-call event:', err);
+      }
+    });
+
+    evtSource.addEventListener('update-call', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        callbacksRef.current.onUpdateCall?.(data);
+      } catch (err) {
+        console.error('[SSE] Error parsing update-call event:', err);
       }
     });
 

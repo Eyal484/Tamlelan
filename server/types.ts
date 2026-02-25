@@ -172,8 +172,23 @@ export interface VoicenterCall {
   // AI Data
   aiData?: VoicenterAIData | null;
 
+  // Gemini Analysis (added on-demand)
+  geminiAnalysis?: GeminiAnalysis;
+
   // Allow additional fields
   [key: string]: any;
+}
+
+// --- Gemini Analysis Result ---
+
+export interface GeminiAnalysis {
+  summary: string;
+  tags: { id: string; label: string; detected: boolean }[];
+  keyPoints: { label: string; quote: string }[];
+  email: string;
+  crmNote: string;
+  callType: string;
+  analyzedAt: string; // ISO timestamp
 }
 
 // --- Call List Item (lightweight for index/list views) ---
@@ -192,4 +207,5 @@ export interface CallListItem {
   queuename: string;
   hasAI: boolean;
   hasSummary: boolean;
+  hasAnalysis: boolean;
 }

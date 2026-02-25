@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import type { VoicenterCall, CallDetailTab } from '../types';
+import type { VoicenterCall, CallDetailTab, GeminiAnalysis } from '../types';
 import { fetchCall } from '../services/api';
 import CallMetadata from './CallMetadata';
 import TranscriptView from './TranscriptView';
 import InsightsView from './InsightsView';
 import EmotionsView from './EmotionsView';
+import AnalysisView from './AnalysisView';
 
 interface Props {
   callId: string;
   onBack: () => void;
 }
 
-const TABS: { id: CallDetailTab; label: string; icon: string }[] = [
+const TABS: { id: CallDetailTab; label: string; icon: string; alwaysShow?: boolean }[] = [
+  { id: 'analysis', label: 'ניתוח', icon: '🔬', alwaysShow: true },
   { id: 'transcript', label: 'תמלול', icon: '📝' },
   { id: 'insights', label: 'תובנות', icon: '💡' },
   { id: 'emotions', label: 'רגשות', icon: '😊' },
-  { id: 'metadata', label: 'פרטים', icon: 'ℹ️' },
+  { id: 'metadata', label: 'פרטים', icon: 'ℹ️', alwaysShow: true },
 ];
 
 function formatEpoch(epoch: number): string {
@@ -33,7 +35,7 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
   const [call, setCall] = useState<VoicenterCall | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<CallDetailTab>('transcript');
+  const [activeTab, setActiveTab] = useState<CallDetailTab>('analysis');
 
   useEffect(() => {
     let cancelled = false;
@@ -44,11 +46,9 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
       .then((data) => {
         if (!cancelled) {
           setCall(data);
-          // Default to transcript if AI data exists, otherwise metadata
-          if (data.aiData?.transcript && data.aiData.transcript.length > 0) {
-            setActiveTab('transcript');
-          } else if (data.aiData?.insights) {
-            setActiveTab('insights');
+          // Default to analysis tab if transcript exists, otherwise metadata
+          if (data.geminiAnalysis || (data.aiData?.transcript && data.aiData.transcript.length > 0)) {
+            setActiveTab('analysis');
           } else {
             setActiveTab('metadata');
           }
@@ -63,6 +63,16 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
 
     return () => { cancelled = true; };
   }, [callId]);
+
+  const handleAnalysisComplete = (analysis: GeminiAnalysis) => {
+    if (!call) return;
+    // If null passed (re-analyze), clear the analysis
+    if (!analysis) {
+      setCall({ ...call, geminiAnalysis: undefined });
+      return;
+    }
+    setCall({ ...call, geminiAnalysis: analysis });
+  };
 
   if (loading) {
     return (
@@ -84,6 +94,7 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
   }
 
   const hasAI = !!(call.aiData && (call.aiData.transcript || call.aiData.insights || call.aiData.emotions));
+  const hasTranscript = !!(call.aiData?.transcript && call.aiData.transcript.length > 0);
 
   return (
     <div className="space-y-4">
@@ -112,7 +123,12 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
               → {call.target || call.did || 'לא ידוע'}
             </div>
           </div>
-          <div className="text-left">
+          <div className="text-left flex items-center gap-2">
+            {call.geminiAnalysis && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 font-bold">
+                נותח
+              </span>
+            )}
             <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
               call.status === 'ANSWER' ? 'bg-green-500/20 text-green-300' :
               call.status === 'ABANDONE' ? 'bg-red-500/20 text-red-300' :
@@ -128,21 +144,27 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
           {call.queuename && <span>מעגל: {call.queuename}</span>}
           {hasAI && <span className="text-cyan-300 font-medium">✨ AI</span>}
         </div>
-        {/* AI Summary preview */}
-        {call.aiData?.insights?.summary && (
+        {/* Gemini summary if analyzed, otherwise Voicenter summary */}
+        {call.geminiAnalysis?.summary ? (
+          <p className="mt-3 text-sm text-slate-300 leading-relaxed border-t border-slate-700 pt-3">
+            {call.geminiAnalysis.summary}
+          </p>
+        ) : call.aiData?.insights?.summary ? (
           <p className="mt-3 text-sm text-slate-300 leading-relaxed border-t border-slate-700 pt-3">
             {call.aiData.insights.summary}
           </p>
-        )}
+        ) : null}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
         {TABS.map((tab) => {
-          // Skip AI tabs if no AI data
-          if (tab.id === 'transcript' && !call.aiData?.transcript?.length) return null;
-          if (tab.id === 'insights' && !call.aiData?.insights) return null;
-          if (tab.id === 'emotions' && !call.aiData?.emotions?.sentences?.length) return null;
+          // Skip AI tabs if no AI data (except analysis + metadata which always show)
+          if (!tab.alwaysShow) {
+            if (tab.id === 'transcript' && !hasTranscript) return null;
+            if (tab.id === 'insights' && !call.aiData?.insights) return null;
+            if (tab.id === 'emotions' && !call.aiData?.emotions?.sentences?.length) return null;
+          }
 
           return (
             <button
@@ -163,6 +185,14 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
 
       {/* Tab content */}
       <div className="min-h-[300px]">
+        {activeTab === 'analysis' && (
+          <AnalysisView
+            callId={callId}
+            analysis={call.geminiAnalysis}
+            hasTranscript={hasTranscript}
+            onAnalysisComplete={handleAnalysisComplete}
+          />
+        )}
         {activeTab === 'metadata' && <CallMetadata call={call} />}
         {activeTab === 'transcript' && (
           <TranscriptView

@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { JsonFileStorage } from './storage.js';
 import { SSEManager } from './sse.js';
+import { analyzeTranscription } from './gemini.js';
 import type { VoicenterCall } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -104,6 +105,61 @@ app.get('/api/calls/:id', async (req, res) => {
   } catch (err) {
     console.error('[API] Error getting call:', err);
     res.status(500).json({ error: 'Failed to get call' });
+  }
+});
+
+// Analyze a call with Gemini
+app.post('/api/calls/:id/analyze', async (req, res) => {
+  try {
+    const call = await storage.getCall(req.params.id);
+    if (!call) {
+      res.status(404).json({ error: 'Call not found' });
+      return;
+    }
+
+    const { callType } = req.body || {};
+
+    // Build transcript text from Voicenter transcript sentences
+    let transcriptText = '';
+    if (call.aiData?.transcript && call.aiData.transcript.length > 0) {
+      transcriptText = call.aiData.transcript
+        .map(s => `${s.speaker}: ${s.text}`)
+        .join('\n');
+    }
+
+    if (!transcriptText.trim()) {
+      res.status(400).json({ error: 'No transcript available for this call' });
+      return;
+    }
+
+    // Build context from call metadata
+    const context = [
+      call.caller ? `מתקשר: ${call.caller}` : '',
+      call.target ? `יעד: ${call.target}` : '',
+      call.representative_name ? `נציג: ${call.representative_name}` : '',
+      call.queuename ? `מעגל: ${call.queuename}` : '',
+      call.duration ? `משך: ${Math.floor(call.duration / 60)}:${(call.duration % 60).toString().padStart(2, '0')}` : '',
+    ].filter(Boolean).join(' | ');
+
+    console.log(`[Analyze] Starting analysis for call ${req.params.id} (type: ${callType || 'general'})`);
+
+    const analysis = await analyzeTranscription(transcriptText, context, callType);
+
+    // Save analysis back to the call
+    call.geminiAnalysis = analysis;
+    await storage.saveCall(call);
+
+    // Broadcast update so list refreshes
+    sse.broadcast('update-call', {
+      ivruniqueid: call.ivruniqueid,
+      hasAnalysis: true,
+    });
+
+    console.log(`[Analyze] Done for ${req.params.id}`);
+    res.json(analysis);
+  } catch (err: any) {
+    console.error('[Analyze] Error:', err);
+    res.status(500).json({ error: err.message || 'Analysis failed' });
   }
 });
 

@@ -112,6 +112,13 @@ const CallList: React.FC<Props> = ({ onSelectCall }) => {
       setCalls(prev => prev.filter(c => c.ivruniqueid !== data.ivruniqueid));
       setTotal(prev => Math.max(0, prev - 1));
     }, []),
+    onUpdateCall: useCallback((data: { ivruniqueid: string; hasAnalysis?: boolean }) => {
+      setCalls(prev => prev.map(c =>
+        c.ivruniqueid === data.ivruniqueid
+          ? { ...c, hasAnalysis: data.hasAnalysis ?? c.hasAnalysis }
+          : c
+      ));
+    }, []),
   });
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
@@ -265,6 +272,9 @@ const CallList: React.FC<Props> = ({ onSelectCall }) => {
                     )}
                     {call.hasAI && (
                       <span className="text-cyan-500 font-medium flex-shrink-0">✨ AI</span>
+                    )}
+                    {call.hasAnalysis && (
+                      <span className="text-green-500 font-medium flex-shrink-0">✅ נותח</span>
                     )}
                   </div>
                 </div>

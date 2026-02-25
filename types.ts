@@ -11,7 +11,8 @@ export type {
   VoicenterEmotionSentence,
   VoicenterIVRLayer,
   CallListItem,
+  GeminiAnalysis,
 } from './server/types';
 
 // Frontend-only types
-export type CallDetailTab = 'transcript' | 'insights' | 'emotions' | 'metadata';
+export type CallDetailTab = 'transcript' | 'insights' | 'emotions' | 'metadata' | 'analysis';
