@@ -4,6 +4,7 @@ import type { VoicenterTranscriptSentence, VoicenterEmotionSentence } from '../t
 interface Props {
   transcript: VoicenterTranscriptSentence[] | null | undefined;
   emotions?: VoicenterEmotionSentence[] | null;
+  focusSentenceId?: number | null;
 }
 
 function formatTime(seconds: number | null): string {
@@ -41,9 +42,16 @@ function getEmotionBadge(emotion: string, direction: number): { label: string; c
   return { label, className };
 }
 
-const TranscriptView: React.FC<Props> = ({ transcript, emotions }) => {
+const TranscriptView: React.FC<Props> = ({ transcript, emotions, focusSentenceId }) => {
   const [activeSentenceId, setActiveSentenceId] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // When focusSentenceId is passed (from scheduling card click), activate it
+  useEffect(() => {
+    if (focusSentenceId != null) {
+      setActiveSentenceId(focusSentenceId);
+    }
+  }, [focusSentenceId]);
 
   // Build emotion map by sentence_id for quick lookup
   const emotionMap = new Map<number, VoicenterEmotionSentence>();

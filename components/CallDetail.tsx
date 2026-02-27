@@ -15,7 +15,7 @@ interface Props {
 const TABS: { id: CallDetailTab; label: string; icon: string; alwaysShow?: boolean }[] = [
   { id: 'analysis', label: 'ניתוח', icon: '🔬', alwaysShow: true },
   { id: 'transcript', label: 'תמלול', icon: '📝' },
-  { id: 'insights', label: 'תובנות', icon: '💡' },
+  { id: 'insights', label: 'סיכום קצר', icon: '💡' },
   { id: 'emotions', label: 'רגשות', icon: '😊' },
   { id: 'metadata', label: 'פרטים', icon: 'ℹ️', alwaysShow: true },
 ];
@@ -31,11 +31,19 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+const SCHEDULING_KEYWORDS = [
+  'נדבר', 'אדבר', 'נפגש', 'אפגש', 'שבוע הבא', 'בשבוע הבא',
+  'מחר', 'ניצור קשר', 'אצור קשר', 'אחזור אליך', 'אחזור אליכם',
+  'תחזור אלינו', 'נקבע פגישה', 'לקבוע פגישה',
+  'בשלישי', 'ברביעי', 'בחמישי', 'בשני', 'בראשון', 'בשישי',
+];
+
 const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
   const [call, setCall] = useState<VoicenterCall | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CallDetailTab>('analysis');
+  const [focusSentenceId, setFocusSentenceId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +103,18 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
 
   const hasAI = !!(call.aiData && (call.aiData.transcript || call.aiData.insights || call.aiData.emotions));
   const hasTranscript = !!(call.aiData?.transcript && call.aiData.transcript.length > 0);
+
+  // Detect scheduling sentence (search from end of transcript for latest mention)
+  const schedulingSentence = call.aiData?.transcript
+    ? [...call.aiData.transcript].reverse().find(s =>
+        SCHEDULING_KEYWORDS.some(kw => s.text.includes(kw))
+      )
+    : null;
+
+  const handleSchedulingClick = () => {
+    setActiveTab('transcript');
+    setFocusSentenceId(schedulingSentence?.sentence_id ?? null);
+  };
 
   return (
     <div className="space-y-4">
@@ -156,6 +176,23 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
         ) : null}
       </div>
 
+      {/* Next call scheduling card */}
+      {schedulingSentence && hasTranscript && (
+        <div
+          onClick={handleSchedulingClick}
+          className="cursor-pointer bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3 hover:bg-blue-100 transition-colors"
+        >
+          <span className="text-xl">📅</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-blue-600 mb-0.5">שיחה / פגישה קרובה</div>
+            <div className="text-sm text-slate-700 truncate">"{schedulingSentence.text}"</div>
+          </div>
+          <svg className="w-4 h-4 text-blue-400 flex-shrink-0 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
         {TABS.map((tab) => {
@@ -198,6 +235,7 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
           <TranscriptView
             transcript={call.aiData?.transcript}
             emotions={call.aiData?.emotions?.sentences}
+            focusSentenceId={focusSentenceId}
           />
         )}
         {activeTab === 'insights' && <InsightsView insights={call.aiData?.insights} />}
