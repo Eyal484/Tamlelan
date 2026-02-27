@@ -7,6 +7,7 @@ interface Props {
   analysis: GeminiAnalysis | null | undefined;
   hasTranscript: boolean;
   onAnalysisComplete: (analysis: GeminiAnalysis) => void;
+  onOpenTranscript?: (quote: string) => void;
 }
 
 const CALL_TYPES = [
@@ -24,7 +25,7 @@ const TAG_LABELS: Record<string, string> = {
   performance_issue: 'בעיית ביצועים',
 };
 
-const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnalysisComplete }) => {
+const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnalysisComplete, onOpenTranscript }) => {
   const [selectedType, setSelectedType] = useState('new_prospect');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +157,17 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
           <div className="space-y-2">
             {analysis.keyPoints.map((kp, i) => (
               <div key={i} className="bg-white rounded-xl border border-slate-200 p-3">
-                <div className="text-sm font-medium text-slate-800 mb-1">{kp.label}</div>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="text-sm font-medium text-slate-800 flex-1">{kp.label}</div>
+                  {onOpenTranscript && kp.quote && (
+                    <button
+                      onClick={() => onOpenTranscript(kp.quote)}
+                      className="flex-shrink-0 text-[11px] text-cyan-600 hover:text-cyan-800 font-medium px-2 py-0.5 rounded-lg bg-cyan-50 hover:bg-cyan-100 transition-colors flex items-center gap-1"
+                    >
+                      📍 <span>בתמלול</span>
+                    </button>
+                  )}
+                </div>
                 <div className="text-xs text-slate-500 italic border-r-2 border-cyan-300 pr-3">
                   &quot;{kp.quote}&quot;
                 </div>

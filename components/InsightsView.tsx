@@ -1,11 +1,13 @@
 import React from 'react';
-import type { VoicenterInsights } from '../types';
+import type { VoicenterInsights, VoicenterTranscriptSentence } from '../types';
 
 interface Props {
   insights: VoicenterInsights | null | undefined;
+  schedulingSentence?: VoicenterTranscriptSentence | null;
+  onSchedulingClick?: () => void;
 }
 
-const InsightsView: React.FC<Props> = ({ insights }) => {
+const InsightsView: React.FC<Props> = ({ insights, schedulingSentence, onSchedulingClick }) => {
   if (!insights) {
     return (
       <div className="text-center py-12 text-slate-400">
@@ -19,6 +21,23 @@ const InsightsView: React.FC<Props> = ({ insights }) => {
 
   return (
     <div className="space-y-4">
+      {/* Scheduling card */}
+      {schedulingSentence && (
+        <div
+          onClick={onSchedulingClick}
+          className="cursor-pointer bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3 hover:bg-blue-100 transition-colors"
+        >
+          <span className="text-xl">📅</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-blue-600 mb-0.5">שיחה / פגישה קרובה</div>
+            <div className="text-sm text-slate-700 truncate">"{schedulingSentence.text}"</div>
+          </div>
+          <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      )}
+
       {/* Summary */}
       {insights.summary && (
         <div className="bg-gradient-to-br from-slate-50 to-cyan-50 rounded-xl border border-cyan-100 p-5">

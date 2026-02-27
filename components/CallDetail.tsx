@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { VoicenterCall, CallDetailTab, GeminiAnalysis } from '../types';
+import type { VoicenterCall, VoicenterTranscriptSentence, CallDetailTab, GeminiAnalysis } from '../types';
 import { fetchCall } from '../services/api';
 import CallMetadata from './CallMetadata';
 import TranscriptView from './TranscriptView';
@@ -38,12 +38,32 @@ const SCHEDULING_KEYWORDS = [
   'בשלישי', 'ברביעי', 'בחמישי', 'בשני', 'בראשון', 'בשישי',
 ];
 
+function findSentenceByQuote(
+  transcript: VoicenterTranscriptSentence[],
+  quote: string
+): number | null {
+  if (!transcript.length || !quote) return null;
+  const clean = quote.trim();
+  const exact = transcript.find(s => s.text.includes(clean));
+  if (exact) return exact.sentence_id;
+  // Try first 20 chars
+  const short = clean.slice(0, 20);
+  if (short.length > 4) {
+    const partial = transcript.find(s => s.text.includes(short));
+    if (partial) return partial.sentence_id;
+  }
+  return null;
+}
+
 const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
   const [call, setCall] = useState<VoicenterCall | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CallDetailTab>('analysis');
-  const [focusSentenceId, setFocusSentenceId] = useState<number | null>(null);
+
+  // Transcript side panel state
+  const [transcriptPanelOpen, setTranscriptPanelOpen] = useState(false);
+  const [transcriptPanelFocusId, setTranscriptPanelFocusId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +74,6 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
       .then((data) => {
         if (!cancelled) {
           setCall(data);
-          // Default to analysis tab if transcript exists, otherwise metadata
           if (data.geminiAnalysis || (data.aiData?.transcript && data.aiData.transcript.length > 0)) {
             setActiveTab('analysis');
           } else {
@@ -74,12 +93,26 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
 
   const handleAnalysisComplete = (analysis: GeminiAnalysis) => {
     if (!call) return;
-    // If null passed (re-analyze), clear the analysis
     if (!analysis) {
       setCall({ ...call, geminiAnalysis: undefined });
       return;
     }
     setCall({ ...call, geminiAnalysis: analysis });
+  };
+
+  // Open transcript panel at a specific quote (from key points)
+  const openTranscriptAtQuote = (quote: string) => {
+    const transcript = call?.aiData?.transcript;
+    if (!transcript) return;
+    const sentenceId = findSentenceByQuote(transcript, quote);
+    setTranscriptPanelFocusId(sentenceId);
+    setTranscriptPanelOpen(true);
+  };
+
+  // Open transcript panel at a specific sentence id (from scheduling card)
+  const openTranscriptAtSentence = (sentenceId: number | null) => {
+    setTranscriptPanelFocusId(sentenceId);
+    setTranscriptPanelOpen(true);
   };
 
   if (loading) {
@@ -104,17 +137,12 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
   const hasAI = !!(call.aiData && (call.aiData.transcript || call.aiData.insights || call.aiData.emotions));
   const hasTranscript = !!(call.aiData?.transcript && call.aiData.transcript.length > 0);
 
-  // Detect scheduling sentence (search from end of transcript for latest mention)
+  // Detect scheduling sentence (search from end for latest mention)
   const schedulingSentence = call.aiData?.transcript
     ? [...call.aiData.transcript].reverse().find(s =>
         SCHEDULING_KEYWORDS.some(kw => s.text.includes(kw))
       )
     : null;
-
-  const handleSchedulingClick = () => {
-    setActiveTab('transcript');
-    setFocusSentenceId(schedulingSentence?.sentence_id ?? null);
-  };
 
   return (
     <div className="space-y-4">
@@ -164,7 +192,6 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
           {call.queuename && <span>מעגל: {call.queuename}</span>}
           {hasAI && <span className="text-cyan-300 font-medium">✨ AI</span>}
         </div>
-        {/* Gemini summary if analyzed, otherwise Voicenter summary */}
         {call.geminiAnalysis?.summary ? (
           <p className="mt-3 text-sm text-slate-300 leading-relaxed border-t border-slate-700 pt-3">
             {call.geminiAnalysis.summary}
@@ -179,7 +206,7 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
       {/* Next call scheduling card */}
       {schedulingSentence && hasTranscript && (
         <div
-          onClick={handleSchedulingClick}
+          onClick={() => openTranscriptAtSentence(schedulingSentence.sentence_id)}
           className="cursor-pointer bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3 hover:bg-blue-100 transition-colors"
         >
           <span className="text-xl">📅</span>
@@ -187,8 +214,8 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
             <div className="text-xs font-bold text-blue-600 mb-0.5">שיחה / פגישה קרובה</div>
             <div className="text-sm text-slate-700 truncate">"{schedulingSentence.text}"</div>
           </div>
-          <svg className="w-4 h-4 text-blue-400 flex-shrink-0 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </div>
       )}
@@ -196,7 +223,6 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
         {TABS.map((tab) => {
-          // Skip AI tabs if no AI data (except analysis + metadata which always show)
           if (!tab.alwaysShow) {
             if (tab.id === 'transcript' && !hasTranscript) return null;
             if (tab.id === 'insights' && !call.aiData?.insights) return null;
@@ -228,6 +254,7 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
             analysis={call.geminiAnalysis}
             hasTranscript={hasTranscript}
             onAnalysisComplete={handleAnalysisComplete}
+            onOpenTranscript={hasTranscript ? openTranscriptAtQuote : undefined}
           />
         )}
         {activeTab === 'metadata' && <CallMetadata call={call} />}
@@ -235,10 +262,16 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
           <TranscriptView
             transcript={call.aiData?.transcript}
             emotions={call.aiData?.emotions?.sentences}
-            focusSentenceId={focusSentenceId}
+            focusSentenceId={transcriptPanelFocusId}
           />
         )}
-        {activeTab === 'insights' && <InsightsView insights={call.aiData?.insights} />}
+        {activeTab === 'insights' && (
+          <InsightsView
+            insights={call.aiData?.insights}
+            schedulingSentence={schedulingSentence}
+            onSchedulingClick={() => openTranscriptAtSentence(schedulingSentence?.sentence_id ?? null)}
+          />
+        )}
         {activeTab === 'emotions' && (
           <EmotionsView
             emotions={call.aiData?.emotions?.sentences}
@@ -246,6 +279,49 @@ const CallDetail: React.FC<Props> = ({ callId, onBack }) => {
           />
         )}
       </div>
+
+      {/* ── Sliding transcript side panel ── */}
+      {hasTranscript && (
+        <>
+          {/* Backdrop */}
+          <div
+            className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 ${
+              transcriptPanelOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+            onClick={() => setTranscriptPanelOpen(false)}
+          />
+
+          {/* Panel — slides in from the left, takes 1/3 of the screen */}
+          <div
+            className={`fixed top-0 left-0 h-full bg-white shadow-2xl z-50 flex flex-col
+              w-1/3 min-w-[260px] max-w-[420px]
+              transition-transform duration-300 ease-in-out
+              ${transcriptPanelOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+              <h3 className="font-bold text-slate-800 text-sm">📝 תמלול</h3>
+              <button
+                onClick={() => setTranscriptPanelOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Scrollable transcript */}
+            <div className="flex-1 overflow-y-auto p-3">
+              <TranscriptView
+                transcript={call.aiData?.transcript}
+                emotions={call.aiData?.emotions?.sentences}
+                focusSentenceId={transcriptPanelFocusId}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
