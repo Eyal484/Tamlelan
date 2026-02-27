@@ -18,6 +18,8 @@ const CALL_TYPES = [
   { id: 'reminder', label: 'תזכורת', icon: '⏰' },
 ];
 
+const GENERIC_CONTEXT = 'שיחת מכירה בעברית. נציג מדבר עם לקוח פוטנציאלי. יש לנתח את השיחה מנקודת מבט של מנהל מכירות.';
+
 const TAG_LABELS: Record<string, string> = {
   self_intro: 'הצגה עצמית',
   offer_sent: 'נשלחה הצעה',
@@ -25,17 +27,99 @@ const TAG_LABELS: Record<string, string> = {
   performance_issue: 'בעיית ביצועים',
 };
 
+// ── Shared analyze form (used both before analysis and in re-evaluate mode) ──
+const AnalyzeForm: React.FC<{
+  selectedType: string;
+  onTypeChange: (t: string) => void;
+  customContext: string;
+  onContextChange: (v: string) => void;
+  onAnalyze: () => void;
+  loading: boolean;
+  error: string | null;
+  compact?: boolean;
+}> = ({ selectedType, onTypeChange, customContext, onContextChange, onAnalyze, loading, error, compact }) => (
+  <div className={`space-y-4 ${compact ? '' : ''}`}>
+    {/* Call type selector */}
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-2">סוג שיחה:</label>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {CALL_TYPES.map(ct => (
+          <button
+            key={ct.id}
+            onClick={() => onTypeChange(ct.id)}
+            className={`text-sm py-2.5 px-3 rounded-xl border-2 font-medium transition-all ${
+              selectedType === ct.id
+                ? 'border-cyan-400 bg-cyan-50 text-cyan-700 shadow-sm'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            <span className="ml-1">{ct.icon}</span>
+            {ct.label}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* Context textarea */}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-sm font-medium text-slate-700">הקשר (אופציונלי):</label>
+        <button
+          onClick={() => onContextChange(customContext === GENERIC_CONTEXT ? '' : GENERIC_CONTEXT)}
+          className="text-xs text-cyan-600 hover:text-cyan-800 font-medium px-2 py-0.5 rounded-lg bg-cyan-50 hover:bg-cyan-100 transition-colors"
+        >
+          {customContext === GENERIC_CONTEXT ? '✕ נקה' : '⚙️ הקשר גנרי'}
+        </button>
+      </div>
+      <textarea
+        value={customContext}
+        onChange={e => onContextChange(e.target.value)}
+        placeholder="הוסף הקשר: שם לקוח, מוצר, שלב במשפך, הערות מיוחדות..."
+        rows={3}
+        className="w-full text-sm border border-slate-200 rounded-xl p-3 text-slate-700 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:border-transparent"
+      />
+    </div>
+
+    {error && (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+        {error}
+      </div>
+    )}
+
+    <button
+      onClick={onAnalyze}
+      disabled={loading}
+      className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-sm hover:from-cyan-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-cyan-200/50"
+    >
+      {loading ? (
+        <span className="flex items-center justify-center gap-2">
+          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          מנתח... (עד 30 שניות)
+        </span>
+      ) : (
+        '🔬 נתח שיחה'
+      )}
+    </button>
+  </div>
+);
+
 const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnalysisComplete, onOpenTranscript }) => {
-  const [selectedType, setSelectedType] = useState('new_prospect');
+  const [selectedType, setSelectedType] = useState(analysis?.callType || 'new_prospect');
+  const [customContext, setCustomContext] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showReanalyze, setShowReanalyze] = useState(false);
 
   const handleAnalyze = async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await analyzeCall(callId, selectedType);
+      const result = await analyzeCall(callId, selectedType, customContext || undefined);
       onAnalysisComplete(result);
+      setShowReanalyze(false);
     } catch (err: any) {
       setError(err.message || 'שגיאה בניתוח');
     } finally {
@@ -56,7 +140,7 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
     );
   }
 
-  // Not yet analyzed — show analyze button
+  // Not yet analyzed — show full analyze form
   if (!analysis) {
     return (
       <div className="space-y-6">
@@ -65,51 +149,15 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
           <h3 className="text-lg font-bold text-slate-800 mb-1">ניתוח שיחה עם AI</h3>
           <p className="text-sm text-slate-500">בחר סוג שיחה וקבל ניתוח מפורט: סיכום, תגיות, נקודות מפתח, מייל מעקב והערת CRM</p>
         </div>
-
-        {/* Call type selector */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">סוג שיחה:</label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {CALL_TYPES.map(ct => (
-              <button
-                key={ct.id}
-                onClick={() => setSelectedType(ct.id)}
-                className={`text-sm py-2.5 px-3 rounded-xl border-2 font-medium transition-all ${
-                  selectedType === ct.id
-                    ? 'border-cyan-400 bg-cyan-50 text-cyan-700 shadow-sm'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <span className="ml-1">{ct.icon}</span>
-                {ct.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        <button
-          onClick={handleAnalyze}
-          disabled={loading}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-sm hover:from-cyan-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-cyan-200/50"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              מנתח... (עד 30 שניות)
-            </span>
-          ) : (
-            '🔬 נתח שיחה'
-          )}
-        </button>
+        <AnalyzeForm
+          selectedType={selectedType}
+          onTypeChange={setSelectedType}
+          customContext={customContext}
+          onContextChange={setCustomContext}
+          onAnalyze={handleAnalyze}
+          loading={loading}
+          error={error}
+        />
       </div>
     );
   }
@@ -209,14 +257,42 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
         </div>
       )}
 
-      {/* Re-analyze button */}
+      {/* Re-analyze section */}
       <div className="pt-2 border-t border-slate-100">
-        <button
-          onClick={() => onAnalysisComplete(null as any)}
-          className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          🔄 נתח מחדש
-        </button>
+        {!showReanalyze ? (
+          <button
+            onClick={() => {
+              setSelectedType(analysis.callType || 'new_prospect');
+              setCustomContext('');
+              setShowReanalyze(true);
+            }}
+            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            🔄 נתח מחדש עם הגדרות שונות
+          </button>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-slate-700">🔄 ניתוח מחדש</h4>
+              <button
+                onClick={() => setShowReanalyze(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ביטול
+              </button>
+            </div>
+            <AnalyzeForm
+              selectedType={selectedType}
+              onTypeChange={setSelectedType}
+              customContext={customContext}
+              onContextChange={setCustomContext}
+              onAnalyze={handleAnalyze}
+              loading={loading}
+              error={error}
+              compact
+            />
+          </div>
+        )}
       </div>
     </div>
   );

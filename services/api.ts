@@ -39,11 +39,11 @@ export async function deleteCall(id: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete call');
 }
 
-export async function analyzeCall(id: string, callType: string): Promise<GeminiAnalysis> {
+export async function analyzeCall(id: string, callType: string, customContext?: string): Promise<GeminiAnalysis> {
   const res = await fetch(`${API_BASE}/calls/${encodeURIComponent(id)}/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ callType }),
+    body: JSON.stringify({ callType, customContext }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Analysis failed' }));

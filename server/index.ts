@@ -117,7 +117,7 @@ app.post('/api/calls/:id/analyze', async (req, res) => {
       return;
     }
 
-    const { callType } = req.body || {};
+    const { callType, customContext } = req.body || {};
 
     // Build transcript text from Voicenter transcript sentences
     let transcriptText = '';
@@ -133,13 +133,16 @@ app.post('/api/calls/:id/analyze', async (req, res) => {
     }
 
     // Build context from call metadata
-    const context = [
+    const autoContext = [
       call.caller ? `מתקשר: ${call.caller}` : '',
       call.target ? `יעד: ${call.target}` : '',
       call.representative_name ? `נציג: ${call.representative_name}` : '',
       call.queuename ? `מעגל: ${call.queuename}` : '',
       call.duration ? `משך: ${Math.floor(call.duration / 60)}:${(call.duration % 60).toString().padStart(2, '0')}` : '',
     ].filter(Boolean).join(' | ');
+
+    // Merge auto-detected context with user-provided custom context
+    const context = [autoContext, customContext].filter(Boolean).join('\n');
 
     console.log(`[Analyze] Starting analysis for call ${req.params.id} (type: ${callType || 'general'})`);
 
