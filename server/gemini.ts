@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { BUSINESS_CONTEXT } from './business-context.js';
 
 // ============================================================
 // Gemini Sales Analysis — Server-Side
@@ -92,6 +93,8 @@ export async function analyzeTranscription(
     : '';
 
   const prompt = `אתה מנתח שיחות מכירה מקצועי בעברית. נתח את התמלול הבא:
+
+${BUSINESS_CONTEXT}
 
 ${callTypeInstruction}
 
