@@ -16,57 +16,42 @@ function formatTime(seconds: number | null): string {
 
 function getEmotionBadge(emotion: string, direction: number): { label: string; className: string } {
   const emotionLabels: Record<string, string> = {
-    frustrated: 'מתוסכל',
-    helpful: 'מסייע',
-    professional: 'מקצועי',
-    cooperative: 'שיתופי',
-    neutral: 'ניטרלי',
-    appreciative: 'מעריך',
-    thankful: 'אסיר תודה',
-    patient: 'סבלני',
-    hopeful: 'מקווה',
-    empathetic: 'אמפתי',
-    confident: 'בטוח',
-    urgent: 'דחוף',
-    agreeable: 'מסכים',
-    efficient: 'יעיל',
-    impatient: 'חסר סבלנות',
+    frustrated: 'מתוסכל', helpful: 'מסייע', professional: 'מקצועי',
+    cooperative: 'שיתופי', neutral: 'ניטרלי', appreciative: 'מעריך',
+    thankful: 'אסיר תודה', patient: 'סבלני', hopeful: 'מקווה',
+    empathetic: 'אמפתי', confident: 'בטוח', urgent: 'דחוף',
+    agreeable: 'מסכים', efficient: 'יעיל', impatient: 'חסר סבלנות',
   };
-
   const label = emotionLabels[emotion.toLowerCase()] || emotion;
-
   let className = 'bg-slate-100 text-slate-600';
   if (direction === 1) className = 'bg-green-100 text-green-700';
   else if (direction === -1) className = 'bg-red-100 text-red-700';
-
   return { label, className };
 }
 
 const TranscriptView: React.FC<Props> = ({ transcript, emotions, focusSentenceId }) => {
   const [activeSentenceId, setActiveSentenceId] = useState<number | null>(null);
+  const [justActivatedId, setJustActivatedId] = useState<number | null>(null); // U4: pulse
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // When focusSentenceId is passed (from scheduling card click), activate it
   useEffect(() => {
     if (focusSentenceId != null) {
       setActiveSentenceId(focusSentenceId);
+      // U4: trigger pulse animation
+      setJustActivatedId(focusSentenceId);
+      setTimeout(() => setJustActivatedId(null), 800);
     }
   }, [focusSentenceId]);
 
-  // Build emotion map by sentence_id for quick lookup
   const emotionMap = new Map<number, VoicenterEmotionSentence>();
   if (emotions) {
-    for (const em of emotions) {
-      emotionMap.set(em.sentence_id, em);
-    }
+    for (const em of emotions) emotionMap.set(em.sentence_id, em);
   }
 
   useEffect(() => {
     if (activeSentenceId !== null && containerRef.current) {
       const el = containerRef.current.querySelector(`[data-sid="${activeSentenceId}"]`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [activeSentenceId]);
 
@@ -101,15 +86,9 @@ const TranscriptView: React.FC<Props> = ({ transcript, emotions, focusSentenceId
         const badgeBg = isRep ? 'bg-cyan-50 text-cyan-700' : 'bg-amber-50 text-amber-700';
 
         return (
-          <div
-            key={gi}
-            className={`border-l-4 ${borderColor} bg-white rounded-lg p-3 shadow-sm`}
-          >
-            {/* Speaker header */}
+          <div key={gi} className={`border-l-4 ${borderColor} bg-white rounded-lg p-3 shadow-sm`}>
             <div className="flex items-center gap-2 mb-2">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeBg}`}>
-                {speakerLabel}
-              </span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeBg}`}>{speakerLabel}</span>
               <span className="text-xs text-slate-400">
                 {formatTime(group.sentences[0].startTime)}
                 {group.sentences[group.sentences.length - 1].endTime !== null &&
@@ -117,19 +96,30 @@ const TranscriptView: React.FC<Props> = ({ transcript, emotions, focusSentenceId
               </span>
             </div>
 
-            {/* Sentences */}
             <div className="space-y-1">
-              {group.sentences.map((sentence) => {
+              {group.sentences.map(sentence => {
                 const emotion = emotionMap.get(sentence.sentence_id);
                 const isActive = activeSentenceId === sentence.sentence_id;
+                const isPulsing = justActivatedId === sentence.sentence_id; // U4
 
                 return (
                   <div
                     key={sentence.sentence_id}
                     data-sid={sentence.sentence_id}
-                    onClick={() => setActiveSentenceId(isActive ? null : sentence.sentence_id)}
-                    className={`cursor-pointer rounded px-2 py-1 transition-colors ${
-                      isActive ? 'bg-cyan-50 ring-1 ring-cyan-200' : 'hover:bg-slate-50'
+                    onClick={() => {
+                      const newActive = isActive ? null : sentence.sentence_id;
+                      setActiveSentenceId(newActive);
+                      if (newActive) {
+                        setJustActivatedId(newActive);
+                        setTimeout(() => setJustActivatedId(null), 800);
+                      }
+                    }}
+                    className={`cursor-pointer rounded-lg px-2 py-1.5 transition-all duration-200 ${
+                      isPulsing
+                        ? 'bg-cyan-100 ring-2 ring-cyan-400 scale-[1.01]'
+                        : isActive
+                        ? 'bg-cyan-50 ring-1 ring-cyan-200'
+                        : 'hover:bg-slate-50'
                     }`}
                   >
                     <span className="text-sm text-slate-700 leading-relaxed">{sentence.text}</span>

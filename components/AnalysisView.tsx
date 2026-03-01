@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { GeminiAnalysis } from '../types';
-import { analyzeCall } from '../services/api';
+import { analyzeCall, askCall } from '../services/api';
 
 interface Props {
   callId: string;
@@ -27,7 +27,47 @@ const TAG_LABELS: Record<string, string> = {
   performance_issue: 'בעיית ביצועים',
 };
 
-// ── Shared analyze form (used both before analysis and in re-evaluate mode) ──
+const OBJECTION_INFO: Record<string, { label: string; color: string; bg: string }> = {
+  price: { label: '💰 התנגדות מחיר', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
+  timing: { label: '⏰ התנגדות תזמון', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
+  competitor: { label: '⚔️ מתחרה / חלופה', color: 'text-red-700', bg: 'bg-red-50 border-red-200' },
+  not_relevant: { label: '🚫 לא רלוונטי', color: 'text-slate-600', bg: 'bg-slate-50 border-slate-200' },
+  needs_approval: { label: '👥 צריך אישור', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+};
+
+// U2: Analysis progress stages
+const ANALYSIS_STAGES = [
+  'קורא את השיחה...',
+  'מזהה נקודות מפתח...',
+  'מנתח ביצועי נציג...',
+  'מכין טיוטת מייל...',
+  'מסיים ניתוח...',
+];
+
+// ── U1: Copy button with animation ──
+const CopyButton: React.FC<{ text: string; label?: string }> = ({ text, label }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className={`text-xs font-medium transition-all duration-200 px-2 py-0.5 rounded-lg ${
+        copied
+          ? 'bg-green-100 text-green-600'
+          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+      }`}
+    >
+      {copied ? '✅ הועתק!' : (label || '📋 העתק')}
+    </button>
+  );
+};
+
+// ── Shared analyze form ──
 const AnalyzeForm: React.FC<{
   selectedType: string;
   onTypeChange: (t: string) => void;
@@ -35,11 +75,11 @@ const AnalyzeForm: React.FC<{
   onContextChange: (v: string) => void;
   onAnalyze: () => void;
   loading: boolean;
+  stageIndex: number;
   error: string | null;
   compact?: boolean;
-}> = ({ selectedType, onTypeChange, customContext, onContextChange, onAnalyze, loading, error, compact }) => (
+}> = ({ selectedType, onTypeChange, customContext, onContextChange, onAnalyze, loading, stageIndex, error, compact }) => (
   <div className={`space-y-4 ${compact ? '' : ''}`}>
-    {/* Call type selector */}
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-2">סוג שיחה:</label>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -60,7 +100,6 @@ const AnalyzeForm: React.FC<{
       </div>
     </div>
 
-    {/* Context textarea */}
     <div>
       <div className="flex items-center justify-between mb-2">
         <label className="block text-sm font-medium text-slate-700">הקשר (אופציונלי):</label>
@@ -81,9 +120,7 @@ const AnalyzeForm: React.FC<{
     </div>
 
     {error && (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
-        {error}
-      </div>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{error}</div>
     )}
 
     <button
@@ -97,11 +134,10 @@ const AnalyzeForm: React.FC<{
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          מנתח... (עד 30 שניות)
+          {/* U2: Progress stage text */}
+          {ANALYSIS_STAGES[stageIndex]}
         </span>
-      ) : (
-        '🔬 נתח שיחה'
-      )}
+      ) : '🔬 נתח שיחה'}
     </button>
   </div>
 );
@@ -110,12 +146,29 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
   const [selectedType, setSelectedType] = useState(analysis?.callType || 'new_prospect');
   const [customContext, setCustomContext] = useState('');
   const [loading, setLoading] = useState(false);
+  const [stageIndex, setStageIndex] = useState(0); // U2
   const [error, setError] = useState<string | null>(null);
   const [showReanalyze, setShowReanalyze] = useState(false);
+
+  // F9: Ask Gemini
+  const [question, setQuestion] = useState('');
+  const [askLoading, setAskLoading] = useState(false);
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
+
+  // U2: Cycle through stages while loading
+  useEffect(() => {
+    if (!loading) { setStageIndex(0); return; }
+    const interval = setInterval(() => {
+      setStageIndex(i => Math.min(i + 1, ANALYSIS_STAGES.length - 1));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const handleAnalyze = async () => {
     setLoading(true);
     setError(null);
+    setStageIndex(0);
     try {
       const result = await analyzeCall(callId, selectedType, customContext || undefined);
       onAnalysisComplete(result);
@@ -127,7 +180,23 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
     }
   };
 
-  // No transcript — can't analyze
+  // F9: Ask handler
+  const handleAsk = async () => {
+    if (!question.trim()) return;
+    setAskLoading(true);
+    setAskError(null);
+    setAskAnswer(null);
+    try {
+      const result = await askCall(callId, question);
+      setAskAnswer(result.answer);
+    } catch (err: any) {
+      setAskError(err.message || 'שגיאה');
+    } finally {
+      setAskLoading(false);
+    }
+  };
+
+  // No transcript
   if (!hasTranscript) {
     return (
       <div className="text-center py-12 text-slate-400">
@@ -140,7 +209,7 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
     );
   }
 
-  // Not yet analyzed — show full analyze form
+  // Not yet analyzed
   if (!analysis) {
     return (
       <div className="space-y-6">
@@ -156,20 +225,22 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
           onContextChange={setCustomContext}
           onAnalyze={handleAnalyze}
           loading={loading}
+          stageIndex={stageIndex}
           error={error}
         />
       </div>
     );
   }
 
-  // Show analysis results
+  // Show results
+  const objectionInfo = analysis.objectionType && analysis.objectionType !== 'none'
+    ? OBJECTION_INFO[analysis.objectionType] : null;
+
   return (
     <div className="space-y-4">
-      {/* Header with call type + timestamp */}
+      {/* Header */}
       <div className="flex items-center justify-between text-xs text-slate-400">
-        <span>
-          סוג: {CALL_TYPES.find(ct => ct.id === analysis.callType)?.label || analysis.callType}
-        </span>
+        <span>סוג: {CALL_TYPES.find(ct => ct.id === analysis.callType)?.label || analysis.callType}</span>
         <span>{new Date(analysis.analyzedAt).toLocaleString('he-IL')}</span>
       </div>
 
@@ -178,6 +249,14 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
         <h4 className="text-xs font-bold text-cyan-700 mb-1.5 uppercase tracking-wider">סיכום</h4>
         <p className="text-sm text-slate-800 leading-relaxed">{analysis.summary}</p>
       </div>
+
+      {/* F4: Objection type badge */}
+      {objectionInfo && (
+        <div className={`rounded-xl p-3 border flex items-center gap-2 ${objectionInfo.bg}`}>
+          <span className={`text-sm font-bold ${objectionInfo.color}`}>{objectionInfo.label}</span>
+          <span className="text-xs text-slate-500">— ההתנגדות העיקרית בשיחה</span>
+        </div>
+      )}
 
       {/* Tags */}
       <div>
@@ -228,15 +307,12 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
       {/* Follow-up Email */}
       {analysis.email && (
         <div>
-          <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">טיוטת מייל מעקב</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">טיוטת מייל מעקב</h4>
+            <CopyButton text={analysis.email} />
+          </div>
           <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
             <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{analysis.email}</p>
-            <button
-              onClick={() => navigator.clipboard.writeText(analysis.email)}
-              className="mt-2 text-xs text-amber-600 hover:text-amber-700 font-medium"
-            >
-              📋 העתק
-            </button>
           </div>
         </div>
       )}
@@ -244,28 +320,54 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
       {/* CRM Note */}
       {analysis.crmNote && (
         <div>
-          <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">הערת CRM</h4>
-          <div className="bg-purple-50 rounded-xl border border-purple-200 p-3 flex items-center justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">הערת CRM</h4>
+            <CopyButton text={analysis.crmNote} />
+          </div>
+          <div className="bg-purple-50 rounded-xl border border-purple-200 p-3">
             <p className="text-sm text-slate-700 font-medium">{analysis.crmNote}</p>
-            <button
-              onClick={() => navigator.clipboard.writeText(analysis.crmNote)}
-              className="text-xs text-purple-500 hover:text-purple-600 font-medium flex-shrink-0 mr-3"
-            >
-              📋
-            </button>
           </div>
         </div>
       )}
 
-      {/* Re-analyze section */}
+      {/* F9: Ask Gemini about this call */}
+      <div className="pt-2 border-t border-slate-100">
+        <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">🤖 שאל על השיחה</h4>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !askLoading && handleAsk()}
+            placeholder="מה הייתה ההתנגדות העיקרית? האם הנציג בצע close?"
+            className="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:border-transparent"
+          />
+          <button
+            onClick={handleAsk}
+            disabled={askLoading || !question.trim()}
+            className="flex-shrink-0 px-4 py-2 rounded-xl bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-40 transition-colors"
+          >
+            {askLoading ? (
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : 'שאל'}
+          </button>
+        </div>
+        {askError && <p className="text-xs text-red-500 mt-1">{askError}</p>}
+        {askAnswer && (
+          <div className="mt-3 bg-slate-50 rounded-xl border border-slate-200 p-3">
+            <p className="text-sm text-slate-700 leading-relaxed">{askAnswer}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Re-analyze */}
       <div className="pt-2 border-t border-slate-100">
         {!showReanalyze ? (
           <button
-            onClick={() => {
-              setSelectedType(analysis.callType || 'new_prospect');
-              setCustomContext('');
-              setShowReanalyze(true);
-            }}
+            onClick={() => { setSelectedType(analysis.callType || 'new_prospect'); setCustomContext(''); setShowReanalyze(true); }}
             className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
           >
             🔄 נתח מחדש עם הגדרות שונות
@@ -274,12 +376,7 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
           <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-slate-700">🔄 ניתוח מחדש</h4>
-              <button
-                onClick={() => setShowReanalyze(false)}
-                className="text-xs text-slate-400 hover:text-slate-600"
-              >
-                ביטול
-              </button>
+              <button onClick={() => setShowReanalyze(false)} className="text-xs text-slate-400 hover:text-slate-600">ביטול</button>
             </div>
             <AnalyzeForm
               selectedType={selectedType}
@@ -288,6 +385,7 @@ const AnalysisView: React.FC<Props> = ({ callId, analysis, hasTranscript, onAnal
               onContextChange={setCustomContext}
               onAnalyze={handleAnalyze}
               loading={loading}
+              stageIndex={stageIndex}
               error={error}
               compact
             />

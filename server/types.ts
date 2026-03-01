@@ -1,6 +1,5 @@
 // ============================================================
 // Voicenter Webhook Types
-// Based on Voicenter CDR API documentation
 // ============================================================
 
 // --- Transcript ---
@@ -18,8 +17,8 @@ export interface VoicenterTranscriptSentence {
 export interface VoicenterQuestion {
   key: string;
   question: string;
-  data_type: string;     // "string" | "boolean" | "number" | "json array" | "json object list" | "json object"
-  answer: any;           // Type depends on data_type
+  data_type: string;
+  answer: any;
 }
 
 export interface VoicenterParticipantInfo {
@@ -44,10 +43,10 @@ export interface VoicenterEmotionSentence {
   sentence_id: number;
   emotion: string;
   emotion_direction: number;   // 1 = positive, -1 = negative, 0 = neutral
-  confidence_emotion: number;  // 0-1
-  intensity_emotion: number;   // 0-1
+  confidence_emotion: number;
+  intensity_emotion: number;
   personality_trait: string | null;
-  confidence_trait: number;    // 0-1
+  confidence_trait: number;
 }
 
 export interface VoicenterEmotions {
@@ -94,11 +93,11 @@ export interface VoicenterCall {
   ivruniqueid: string;
   caller: string;
   target: string;
-  time: number;              // Epoch timestamp (seconds)
-  duration: number;          // Call duration in seconds
-  type: string;              // "Incoming Call", "Extension Outgoing", "Queue", etc.
-  status: string;            // "ANSWER", "ABANDONE", "NOANSWER", "BUSY", etc.
-  direction?: string;        // "incoming" | "outgoing" | "internal"
+  time: number;
+  duration: number;
+  type: string;
+  status: string;
+  direction?: string;
 
   // Extension/DID info
   did: string;
@@ -110,7 +109,7 @@ export interface VoicenterCall {
   callerPhone?: string;
 
   // Answer & timing
-  isAnswer?: number;           // 0 or 1
+  isAnswer?: number;
   actualCallDuration?: number;
   actualCallDialtime?: number;
   dialtime?: number;
@@ -143,7 +142,7 @@ export interface VoicenterCall {
   // IVR routing
   IVR?: VoicenterIVRLayer[];
 
-  // Leg 1/2 for multi-leg calls
+  // Leg 1/2
   leg1DialStatusName?: string;
 
   // Transfer
@@ -175,6 +174,9 @@ export interface VoicenterCall {
   // Gemini Analysis (added on-demand)
   geminiAnalysis?: GeminiAnalysis;
 
+  // F7: Starred/favorite
+  starred?: boolean;
+
   // Allow additional fields
   [key: string]: any;
 }
@@ -189,6 +191,7 @@ export interface GeminiAnalysis {
   crmNote: string;
   callType: string;
   analyzedAt: string; // ISO timestamp
+  objectionType?: string; // F4: price | timing | competitor | not_relevant | needs_approval | none
 }
 
 // --- Call List Item (lightweight for index/list views) ---
@@ -208,4 +211,10 @@ export interface CallListItem {
   hasAI: boolean;
   hasSummary: boolean;
   hasAnalysis: boolean;
+  // New fields
+  starred: boolean;           // F7
+  detectedTags: string[];     // F2: tag IDs detected as true
+  objectionType?: string;     // F4
+  summary?: string;           // F8: for AI search
+  crmNote?: string;           // F8: for AI search
 }

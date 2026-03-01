@@ -14,12 +14,16 @@ export async function fetchCalls(params?: {
   limit?: number;
   search?: string;
   direction?: string;
+  starred?: boolean;
+  tags?: string[];
 }): Promise<CallsListResponse> {
   const qs = new URLSearchParams();
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
   if (params?.search) qs.set('search', params.search);
   if (params?.direction && params.direction !== 'all') qs.set('direction', params.direction);
+  if (params?.starred) qs.set('starred', 'true');
+  if (params?.tags?.length) qs.set('tags', params.tags.join(','));
 
   const res = await fetch(`${API_BASE}/calls?${qs}`);
   if (!res.ok) throw new Error('Failed to fetch calls');
@@ -48,6 +52,49 @@ export async function analyzeCall(id: string, callType: string, customContext?: 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Analysis failed' }));
     throw new Error(err.error || 'Analysis failed');
+  }
+  return res.json();
+}
+
+// F7: Star/unstar a call
+export async function starCall(id: string, starred: boolean): Promise<CallListItem> {
+  const res = await fetch(`${API_BASE}/calls/${encodeURIComponent(id)}/star`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ starred }),
+  });
+  if (!res.ok) throw new Error('Failed to star call');
+  return res.json();
+}
+
+// F6: Full-text search in transcripts
+export async function searchTranscripts(q: string): Promise<{ calls: CallListItem[] }> {
+  const res = await fetch(`${API_BASE}/search/transcripts?q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error('Search failed');
+  return res.json();
+}
+
+// F8: AI semantic search
+export async function aiSearch(query: string): Promise<{ calls: CallListItem[] }> {
+  const res = await fetch(`${API_BASE}/search/ai`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  if (!res.ok) throw new Error('AI search failed');
+  return res.json();
+}
+
+// F9: Ask Gemini about a specific call
+export async function askCall(id: string, question: string): Promise<{ answer: string }> {
+  const res = await fetch(`${API_BASE}/calls/${encodeURIComponent(id)}/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to answer' }));
+    throw new Error(err.error || 'Failed to answer');
   }
   return res.json();
 }

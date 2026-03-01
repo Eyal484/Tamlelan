@@ -4,6 +4,16 @@ import CallDetail from './components/CallDetail';
 
 const App: React.FC = () => {
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
+  const [listSearch, setListSearch] = useState<string>('');
+
+  const handleBack = () => {
+    setSelectedCallId(null);
+  };
+
+  const handleSearchCaller = (caller: string) => {
+    setListSearch(caller);
+    setSelectedCallId(null);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -13,7 +23,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3">
             <h1
               className="text-2xl font-bold tracking-tight cursor-pointer"
-              onClick={() => setSelectedCallId(null)}
+              onClick={() => { setSelectedCallId(null); setListSearch(''); }}
             >
               Tamlelan
             </h1>
@@ -23,7 +33,7 @@ const App: React.FC = () => {
           </div>
           {selectedCallId && (
             <button
-              onClick={() => setSelectedCallId(null)}
+              onClick={handleBack}
               className="text-sm text-slate-300 hover:text-white transition-colors"
             >
               ← רשימת שיחות
@@ -37,10 +47,14 @@ const App: React.FC = () => {
         {selectedCallId ? (
           <CallDetail
             callId={selectedCallId}
-            onBack={() => setSelectedCallId(null)}
+            onBack={handleBack}
+            onSearchCaller={handleSearchCaller}
           />
         ) : (
-          <CallList onSelectCall={setSelectedCallId} />
+          <CallList
+            onSelectCall={setSelectedCallId}
+            initialSearch={listSearch}
+          />
         )}
       </main>
 
