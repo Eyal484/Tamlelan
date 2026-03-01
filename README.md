@@ -2,213 +2,255 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Tamlelan - AI Co-Sales Agent for Recruitment Ads
+# Tamlelan — AI Sales Call Manager
 
-An intelligent sales assistant for B2B recruitment professionals. Tamlelan transcribes and analyzes sales calls in real-time, extracts key insights, generates follow-up emails, and maintains organized records—all with Hebrew language support.
+A full-stack call management platform for B2B recruitment sales teams. Tamlelan receives calls from Voicenter, auto-analyzes transcripts with Gemini AI, and provides a real-time Hebrew-first dashboard for reviewing, searching, and acting on sales conversations.
 
-**Built for**: Israeli recruitment agencies and sales teams selling job advertisement packages.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1Q-wVw1oNlD3WnCwi1G0oq1TDrmnSBEQI
+**Built for**: Drushim.co.il sales team selling recruitment ad packages.
 
 ---
 
-## 🎯 Core Features
+## 🏗️ Architecture
 
-### **1. Audio Recording & Transcription**
-- **Dual-mode recording**:
-  - 🎤 Microphone-only: Capture your voice and conversation
-  - 🔊 Both sides: Record your voice + system audio (for recording both parties)
-- **Audio playback**: Preview recordings before transcription
-- **File upload**: Process previously recorded calls
-- **Gemini AI**: Hebrew/English automatic transcription with high accuracy
-
-### **2. Intelligent Call Analysis**
-
-#### Call Type Classification
-Select from 5 call types for tailored analysis:
-- **בדיקת ביצועים** (Performance Check) - How is the ad performing?
-- **חידוש/הזמנה חוזרת** (Renewal/Reorder) - Previous client follow-up
-- **לקוח חדש** (New Prospect) - Lead from website
-- **עקיבה על הצעה** (Follow-up on Offering) - Closing existing proposals
-- **תזכורת לשימוש** (Reminder) - Reminding about unused packages
-
-#### Type-Specific Insights
-Each call type generates custom analysis:
-- **Automatic summaries** focused on relevant details
-- **Smart extraction** of conversation markers (introductions, offers, objections, performance issues)
-- **Key discussion points** with exact quotes from the conversation
-- **Professional follow-up emails** (20-50 words, ready to send)
-- **CRM notes** (5-12 word summaries for your CRM system)
-
-### **3. Call History & Organization**
-
-- **Browser-local storage**: All calls saved to localStorage (no server needed)
-- **Rich search**: Find calls by summary, transcript, tags, context, or call type
-- **Call details view**: See full transcript, analysis, extracted data
-- **Context tracking**: Add pre-call notes before recording (client background, goals, etc.)
-- **CSV export**: Download all call data with timestamps, summaries, tags, CRM notes
-
-### **4. Speaker Separation**
-When recording both sides of a conversation, Gemini automatically labels:
-- `אני:` (Your voice / seller)
-- `לקוח:` (Customer / other party)
-- `[?]:` (Uncertain speaker)
-
----
-
-## 🚀 Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| **Enter** | Start recording (from IDLE screen) |
-| **Esc** | Cancel recording |
-
----
-
-## 💻 Tech Stack
-
-- **Frontend**: React 19 + TypeScript + Vite
-- **AI**: Google Gemini 3 Flash (transcription + analysis)
-- **Storage**: Browser localStorage
-- **Styling**: Tailwind CSS
-- **Language**: Hebrew-first interface with English support
-
----
-
-## 📋 Installation & Setup
-
-**Prerequisites**: Node.js 18+
-
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Set up your Gemini API key** in `.env.local`:
-   ```
-   API_KEY=your_gemini_api_key_here
-   ```
-   Get a free key at: https://ai.google.dev/
-
-3. **Run locally**:
-   ```bash
-   npm run dev
-   ```
-   Open http://localhost:5173
-
----
-
-## 🏗️ Build for Production
-
-```bash
-npm run build      # Create optimized bundle
-npm run preview    # Test production build locally
 ```
+Voicenter PBX
+     │  webhook POST
+     ▼
+Express Backend (Oracle Cloud VM :3001)
+     │  saves JSON · broadcasts SSE
+     ▼
+React Frontend (served from same process)
+     │  Google Sign-In · real-time updates
+     ▼
+Gemini AI  ←→  analysis · semantic search · Q&A
+```
+
+| Layer | Tech |
+|-------|------|
+| Frontend | React 19 + TypeScript + Vite + Tailwind CSS |
+| Backend | Express.js + Node.js 18 |
+| AI | Google Gemini 2.0 Flash |
+| Auth | Firebase Auth — Google Sign-In |
+| Storage | JSON files on disk (one file per call) |
+| Realtime | Server-Sent Events (SSE) |
+| Deploy | Oracle Cloud VM + GitHub Actions + PM2 |
+
+---
+
+## 🔒 Authentication
+
+Access is restricted to **Google accounts** matching:
+- `*@drushim.il`
+- `eyalbch@gmail.com`
+
+Sign-in via Google popup → Firebase issues an ID token → backend verifies with Firebase REST API on every request (55-min in-memory cache). The Voicenter webhook is excluded from auth.
+
+---
+
+## 🎯 Features
+
+### Core (F-series)
+
+| ID | Feature | Description |
+|----|---------|-------------|
+| F1 | Auto-analyze | Calls with transcripts are automatically analyzed by Gemini on webhook receipt |
+| F2 | Tag filtering | Filter by detected conversation tags (הצגה עצמית, הצעה נשלחה, מעקב...) |
+| F3 | Call detail | Tabbed view: Analysis · Transcript · Insights · Emotions · Metadata |
+| F4 | Objection detection | Gemini labels objections: מחיר / תזמון / מתחרה / לא רלוונטי / אישור |
+| F5 | Contact thread | Shows how many other calls came from the same number; click to filter |
+| F6 | Full-text search | Search inside all transcripts by keyword |
+| F7 | Star / bookmark | Star important calls; filter to starred view |
+| F8 | AI semantic search | Natural language query → Gemini finds relevant calls + highlights the matching transcript sentence |
+| F9 | Ask Gemini | Free-form questions about a specific call answered from its transcript |
+
+### UI Enhancements (U-series)
+
+| ID | Enhancement |
+|----|------------|
+| U1 | Direction filter: All / Incoming / Outgoing / Starred |
+| U2 | Status dots (green=answered, red=abandoned, yellow=no answer) |
+| U3 | New call flash highlight (3s cyan ring on arrival) |
+| U4 | Human-readable duration & relative timestamps |
+| U5 | Rich call row: rep avatar · caller → target · badges · AI reason |
+| U6 | Tabbed call detail with fade transition |
+| U7 | Rep color avatars (consistent color per rep name) |
+| U8 | CSV export (UTF-8 BOM for Excel) |
+| U9 | Tab switch fade animation |
+| U10 | Back button in header when call detail is open |
+| U11 | Skeleton loading rows |
+| U12 | Meaningful empty states per filter type |
+| U13 | Tag filter chips |
+| U14 | Sliding transcript side panel (opens from analysis quotes) |
 
 ---
 
 ## 📁 Project Structure
 
 ```
-.
-├── App.tsx                 # Main application component
-├── types.ts               # TypeScript interfaces
+Tamlelan/
+├── App.tsx                    # Auth gate → CallList | CallDetail
+├── types.ts                   # Shared TypeScript interfaces
+├── .env                       # Public Firebase client config (committed)
+├── .env.local                 # Secrets: GEMINI_API_KEY, FIREBASE_API_KEY (gitignored)
+│
+├── components/
+│   ├── CallList.tsx           # Main list with search, filters, SSE, AI search
+│   ├── CallDetail.tsx         # Tabbed call detail view
+│   ├── LoginScreen.tsx        # Google Sign-In screen
+│   ├── AnalysisView.tsx       # Gemini analysis panel + ask Q&A
+│   ├── TranscriptView.tsx     # Transcript with emotion colors + AI banner
+│   ├── InsightsView.tsx       # AI insights summary
+│   ├── EmotionsView.tsx       # Per-sentence emotion chart
+│   └── CallMetadata.tsx       # Raw call metadata table
+│
+├── hooks/
+│   ├── useAuth.ts             # Firebase onIdTokenChanged → AuthUser | null
+│   └── useSSE.ts              # EventSource with ?token= auth query param
+│
+├── lib/
+│   └── firebase.ts            # Firebase app init + signInWithGoogle
+│
 ├── services/
-│   └── gemini.ts         # Gemini API integration
-├── README.md             # This file
-└── [.env.local]          # Your API keys (create this)
+│   └── api.ts                 # All fetch calls with Bearer token headers
+│
+└── server/
+    ├── index.ts               # Express app: middleware · auth · all routes
+    ├── storage.ts             # JSON file read/write + in-memory index
+    ├── sse.ts                 # SSE client manager + broadcast
+    ├── gemini.ts              # analyzeTranscription · askAboutCall · semanticSearch
+    └── types.ts               # Server-side types (VoicenterCall shape)
 ```
 
 ---
 
-## 🎬 How to Use
+## 🚀 Local Development
 
-### Basic Workflow
+**Prerequisites**: Node.js 18+, a Gemini API key, a Firebase project
 
-1. **Select Call Type** (Optional - can be set after recording)
-2. **Add Context** (Optional - notes about the call)
-3. **Choose Recording Mode**: Microphone only or Both sides
-4. **Press Enter** or click record button
-5. **Have your conversation**
-6. **Stop Recording** - Audio plays back immediately
-7. **Click Transcribe** - Gemini generates transcript
-8. **Analyze** - Get summary, emails, CRM notes
-9. **Save** - Automatically stored in browser history
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-### Managing History
+2. **Create `.env.local`** (never committed)
+   ```
+   GEMINI_API_KEY=your_key_here
+   FIREBASE_API_KEY=your_firebase_web_api_key
+   ```
 
-- **Search**: Find calls by any keyword
-- **Export**: Download all calls as CSV (for Excel/CRM)
-- **View Details**: Click any call to see full analysis
-- **Delete**: Remove calls you no longer need
+3. **Run dev server** (frontend + backend together via concurrently)
+   ```bash
+   npm run dev
+   ```
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3001
+
+4. **Send a test webhook**
+   ```bash
+   curl -X POST http://localhost:3001/api/webhook/voicenter \
+     -H "Content-Type: application/json" \
+     -d @test-call.json
+   ```
+
+---
+
+## 🏭 Production Deployment
+
+**Server**: Oracle Cloud VM — `151.145.90.232:3001`
+**Deploy trigger**: Push to `main` branch → GitHub Actions SSH deploy
+
+### GitHub Actions workflow (`.github/workflows/deploy.yml`)
+```
+git pull → npm install → npm run build → pm2 restart tamlelan
+```
+
+### First-time server setup
+```bash
+# On the server, create /home/ubuntu/Tamlelan/.env.local with:
+GEMINI_API_KEY=...
+FIREBASE_API_KEY=...
+```
+
+### After committing a new `.env` to git (run on server)
+```bash
+GEMINI_KEY=$(grep GEMINI_API_KEY ~/Tamlelan/.env.local | cut -d= -f2-)
+# Then append to .env after git pull if needed
+```
 
 ---
 
 ## 🔄 Data Flow
 
 ```
-Record Audio
-    ↓
-Preview & Transcribe (Gemini)
-    ↓
-Analyze (Type-specific Gemini prompt)
-    ↓
-Generate Email + CRM Note
-    ↓
-Save to History (localStorage)
-    ↓
-Search, Export, Share
+Voicenter webhook POST /api/webhook/voicenter
+    │
+    ├─ saveCall() → JSON file on disk
+    ├─ SSE broadcast('new-call') → all connected browsers
+    └─ if transcript exists → auto-analyze with Gemini
+           │
+           └─ saveCall() with analysis → SSE broadcast('update-call')
+
+Browser
+    ├─ GET /api/calls        → paginated list
+    ├─ GET /api/calls/:id    → full call JSON
+    ├─ POST /api/calls/:id/analyze   → manual Gemini analysis
+    ├─ POST /api/calls/:id/ask       → free-form Q&A
+    ├─ GET /api/search/transcripts   → full-text search
+    ├─ POST /api/search/ai           → semantic search
+    ├─ PATCH /api/calls/:id/star     → star toggle
+    └─ GET /api/calls/stream         → SSE (token via ?token=)
 ```
 
 ---
 
-## 📊 Supported Languages
+## 🔑 Environment Variables
 
-- **Hebrew** ✅ (Primary - all UI & analysis in Hebrew)
-- **English** ✅ (Supported in transcription & analysis)
-- **Mixed conversations** ✅ (Gemini handles code-switching)
+| Variable | Where | Purpose |
+|----------|-------|---------|
+| `GEMINI_API_KEY` | `.env.local` (server) | Gemini AI calls |
+| `FIREBASE_API_KEY` | `.env.local` (server) | Verify Firebase ID tokens |
+| `VITE_FIREBASE_API_KEY` | `.env` (committed) | Firebase client SDK |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `.env` | Firebase client SDK |
+| `VITE_FIREBASE_PROJECT_ID` | `.env` | Firebase client SDK |
+| `VITE_FIREBASE_STORAGE_BUCKET` | `.env` | Firebase client SDK |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | `.env` | Firebase client SDK |
+| `VITE_FIREBASE_APP_ID` | `.env` | Firebase client SDK |
+| `PORT` | env / PM2 | Server port (default: 3001) |
+| `DATA_DIR` | env / PM2 | Call storage directory |
 
 ---
 
-## 🔒 Privacy & Data
+## 📋 Pending / Roadmap
 
-- **All data stored locally** in your browser's localStorage
-- **No calls sent to servers** (except Gemini API for transcription)
-- **No tracking** or analytics
-- **Clear data anytime** by clearing browser storage
+- [ ] **Pull model**: Switch Voicenter integration from webhook (push) to API polling (pull) with admin token — removes dependency on public IP
+- [ ] **Server refactor**: Split `server/index.ts` into `routes/` + `middleware/` folders
+- [ ] **Types consolidation**: Single `types.ts` shared between frontend and backend
+- [ ] **Call notes**: Freeform notes per call saved to disk
+- [ ] **Rep performance dashboard**: Aggregated stats per representative
+- [ ] **Audio playback**: Stream call recordings from Voicenter CDN
 
 ---
 
 ## 🐛 Troubleshooting
 
-### "Failed to record audio"
-- Check microphone permissions in browser
-- Try a different browser (Chrome/Edge recommended)
-- Close other apps using microphone
+### Login fails / "Forbidden"
+- Confirm your Google account matches `@drushim.il` or `eyalbch@gmail.com`
+- Enable Google Sign-In in Firebase Console → Authentication → Sign-in method
 
-### "Transcription failed"
-- Check internet connection
-- Verify API key is set correctly
-- Try again with the **Retry** button
-- Ensure audio file is < 25MB (Gemini limit)
+### No calls appearing
+- Check PM2 logs: `pm2 logs tamlelan`
+- Verify webhook is hitting the right IP/port
+- Check `GEMINI_API_KEY` is set on the server
 
-### "Storage full"
-- Export CSV to back up your data
-- Clear older calls from history
-- Clear browser cache/localStorage
-
----
-
-## 📞 Support
-
-For issues or feature requests, please open a GitHub issue.
+### SSE disconnects constantly
+- Normal — EventSource auto-reconnects. Check server logs for auth errors (missing `?token=`)
 
 ---
 
 ## 📝 License
 
-Private project for internal use.
+Private project — internal use only.
 
 ---
 
-**Built with ❤️ for Israeli recruitment teams**
+**Built with ❤️ for the Drushim sales team**
