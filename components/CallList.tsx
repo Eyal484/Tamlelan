@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { CallListItem } from '../types';
 import { fetchCalls, deleteCall as apiDeleteCall, starCall as apiStarCall, aiSearch } from '../services/api';
+import type { AiCallResult } from '../services/api';
 import { useSSE } from '../hooks/useSSE';
 
 interface Props {
-  onSelectCall: (id: string) => void;
+  onSelectCall: (id: string, highlight?: string) => void;
   initialSearch?: string;
 }
 
@@ -122,7 +123,7 @@ const CallList: React.FC<Props> = ({ onSelectCall, initialSearch }) => {
   const [aiMode, setAiMode] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiResults, setAiResults] = useState<CallListItem[] | null>(null);
+  const [aiResults, setAiResults] = useState<AiCallResult[] | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -452,11 +453,15 @@ const CallList: React.FC<Props> = ({ onSelectCall, initialSearch }) => {
           const repInitials = getRepInitials(call.representative_name);
           const objection = call.objectionType && call.objectionType !== 'none'
             ? OBJECTION_LABELS[call.objectionType] : null;
+          const callAiHighlight = aiResults?.find(r => r.ivruniqueid === call.ivruniqueid)?.aiHighlight;
 
           return (
             <div
               key={call.ivruniqueid}
-              onClick={() => onSelectCall(call.ivruniqueid)}
+              onClick={() => {
+                const aiResult = aiResults?.find(r => r.ivruniqueid === call.ivruniqueid);
+                onSelectCall(call.ivruniqueid, aiResult?.aiHighlight);
+              }}
               className={`bg-white rounded-xl border p-3.5 cursor-pointer hover:shadow-md transition-all duration-200 group ${
                 isNew ? 'border-cyan-300 ring-2 ring-cyan-200 shadow-md shadow-cyan-100' : 'border-slate-200 hover:border-cyan-200'
               }`}
@@ -511,6 +516,14 @@ const CallList: React.FC<Props> = ({ onSelectCall, initialSearch }) => {
                       </span>
                     )}
                   </div>
+
+                  {/* F8: AI highlight reason */}
+                  {callAiHighlight && (
+                    <div className="flex items-center gap-1 mt-1.5">
+                      <span className="text-[10px] text-cyan-400">🤖</span>
+                      <span className="text-[10px] text-cyan-600 italic truncate">{callAiHighlight}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: star (F7) + delete */}

@@ -214,10 +214,15 @@ ${transcriptText}
 // F8: AI Semantic Search across calls
 // ============================================================
 
+export interface SearchMatch {
+  id: string;
+  reason: string; // short Hebrew phrase (3-6 words) explaining why this call matched
+}
+
 export async function semanticSearch(
   query: string,
   calls: Array<{ id: string; text: string }>,
-): Promise<string[]> {
+): Promise<SearchMatch[]> {
   if (calls.length === 0) return [];
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -237,15 +242,34 @@ export async function semanticSearch(
 שיחות (מזהה: תיאור):
 ${callsText}
 
-החזר רק מזהי שיחות רלוונטיות מופרדים בפסיקים. אם אין — החזר ריק.
-ענה אך ורק עם המזהים.`;
+עבור כל שיחה רלוונטית, החזר את המזהה שלה ומשפט קצר (3-6 מילים בעברית) שמסביר מהי הסיבה הספציפית לרלוונטיות — ציטוט או תיאור מדויק מהתיאור.
+שיחות שאינן רלוונטיות — אל תכלול.
+החזר JSON בלבד.`;
+
+  const responseSchema = {
+    type: 'array' as const,
+    items: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string' as const },
+        reason: { type: 'string' as const },
+      },
+      required: ['id', 'reason'],
+    },
+  };
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-lite',
     contents: prompt,
+    config: { responseMimeType: 'application/json', responseSchema },
   });
 
   const raw = (response.text || '').trim();
   if (!raw) return [];
-  return raw.split(',').map(s => s.trim()).filter(Boolean);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }

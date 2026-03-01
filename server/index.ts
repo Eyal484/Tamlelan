@@ -301,8 +301,14 @@ app.post('/api/search/ai', async (req, res) => {
       return;
     }
 
-    const matchingIds = await semanticSearch(query, callsWithText);
-    const matchingCalls = allIndexed.filter(c => matchingIds.includes(c.ivruniqueid));
+    const matches = await semanticSearch(query, callsWithText);
+    const matchedIds = matches.map(m => m.id);
+    const matchingCalls = allIndexed
+      .filter(c => matchedIds.includes(c.ivruniqueid))
+      .map(c => ({
+        ...c,
+        aiHighlight: matches.find(m => m.id === c.ivruniqueid)?.reason,
+      }));
 
     res.json({ calls: matchingCalls });
   } catch (err: any) {

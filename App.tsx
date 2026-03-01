@@ -5,14 +5,22 @@ import CallDetail from './components/CallDetail';
 const App: React.FC = () => {
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [listSearch, setListSearch] = useState<string>('');
+  const [aiHighlight, setAiHighlight] = useState<string | null>(null);
 
   const handleBack = () => {
     setSelectedCallId(null);
+    setAiHighlight(null);
   };
 
   const handleSearchCaller = (caller: string) => {
     setListSearch(caller);
     setSelectedCallId(null);
+    setAiHighlight(null);
+  };
+
+  const handleSelectCall = (id: string, highlight?: string) => {
+    setSelectedCallId(id);
+    setAiHighlight(highlight || null);
   };
 
   return (
@@ -49,10 +57,11 @@ const App: React.FC = () => {
             callId={selectedCallId}
             onBack={handleBack}
             onSearchCaller={handleSearchCaller}
+            aiHighlight={aiHighlight}
           />
         ) : (
           <CallList
-            onSelectCall={setSelectedCallId}
+            onSelectCall={handleSelectCall}
             initialSearch={listSearch}
           />
         )}

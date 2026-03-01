@@ -5,6 +5,7 @@ interface Props {
   transcript: VoicenterTranscriptSentence[] | null | undefined;
   emotions?: VoicenterEmotionSentence[] | null;
   focusSentenceId?: number | null;
+  aiHighlight?: string | null; // reason phrase from AI search to display as banner
 }
 
 function formatTime(seconds: number | null): string {
@@ -29,7 +30,7 @@ function getEmotionBadge(emotion: string, direction: number): { label: string; c
   return { label, className };
 }
 
-const TranscriptView: React.FC<Props> = ({ transcript, emotions, focusSentenceId }) => {
+const TranscriptView: React.FC<Props> = ({ transcript, emotions, focusSentenceId, aiHighlight }) => {
   const [activeSentenceId, setActiveSentenceId] = useState<number | null>(null);
   const [justActivatedId, setJustActivatedId] = useState<number | null>(null); // U4: pulse
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +80,15 @@ const TranscriptView: React.FC<Props> = ({ transcript, emotions, focusSentenceId
 
   return (
     <div ref={containerRef} className="space-y-3">
+      {/* AI highlight banner */}
+      {aiHighlight && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-xl">
+          <span className="text-sm">🤖</span>
+          <span className="text-xs text-cyan-600 font-medium">רלוונטי לחיפוש:</span>
+          <span className="text-xs text-cyan-700 italic">{aiHighlight}</span>
+        </div>
+      )}
+
       {groups.map((group, gi) => {
         const isRep = group.speaker === 'Speaker0';
         const speakerLabel = isRep ? 'נציג' : 'לקוח';

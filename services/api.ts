@@ -75,7 +75,11 @@ export async function searchTranscripts(q: string): Promise<{ calls: CallListIte
 }
 
 // F8: AI semantic search
-export async function aiSearch(query: string): Promise<{ calls: CallListItem[] }> {
+export interface AiCallResult extends CallListItem {
+  aiHighlight?: string; // short phrase explaining why Gemini matched this call
+}
+
+export async function aiSearch(query: string): Promise<{ calls: AiCallResult[] }> {
   const res = await fetch(`${API_BASE}/search/ai`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

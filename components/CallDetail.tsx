@@ -11,6 +11,7 @@ interface Props {
   callId: string;
   onBack: () => void;
   onSearchCaller?: (caller: string) => void;
+  aiHighlight?: string | null; // reason phrase from AI search — auto-opens transcript at matching sentence
 }
 
 const TABS: { id: CallDetailTab; label: string; icon: string; alwaysShow?: boolean }[] = [
@@ -39,6 +40,25 @@ const SCHEDULING_KEYWORDS = [
   'בשלישי', 'ברביעי', 'בחמישי', 'בשני', 'בראשון', 'בשישי',
 ];
 
+function findSentenceByKeywords(
+  transcript: VoicenterTranscriptSentence[],
+  keywords: string,
+): number | null {
+  if (!transcript.length || !keywords) return null;
+  const words = keywords.trim().split(/\s+/).filter(w => w.length > 2);
+  if (!words.length) return null;
+  let bestId: number | null = null;
+  let bestScore = 0;
+  for (const sentence of transcript) {
+    const score = words.filter(w => sentence.text.includes(w)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = sentence.sentence_id;
+    }
+  }
+  return bestScore > 0 ? bestId : null;
+}
+
 function findSentenceByQuote(
   transcript: VoicenterTranscriptSentence[],
   quote: string,
@@ -55,7 +75,7 @@ function findSentenceByQuote(
   return null;
 }
 
-const CallDetail: React.FC<Props> = ({ callId, onBack, onSearchCaller }) => {
+const CallDetail: React.FC<Props> = ({ callId, onBack, onSearchCaller, aiHighlight }) => {
   const [call, setCall] = useState<VoicenterCall | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +84,9 @@ const CallDetail: React.FC<Props> = ({ callId, onBack, onSearchCaller }) => {
 
   // F5: Contact thread count
   const [callerCallCount, setCallerCallCount] = useState<number | null>(null);
+
+  // AI search: sentence to focus in transcript
+  const [aiFocusSentenceId, setAiFocusSentenceId] = useState<number | null>(null);
 
   // Transcript side panel
   const [transcriptPanelOpen, setTranscriptPanelOpen] = useState(false);
@@ -78,7 +101,16 @@ const CallDetail: React.FC<Props> = ({ callId, onBack, onSearchCaller }) => {
       .then(data => {
         if (!cancelled) {
           setCall(data);
-          setActiveTab('analysis');
+          setAiFocusSentenceId(null);
+
+          // If opened from AI search: find matching sentence and switch to transcript tab
+          if (aiHighlight && data.aiData?.transcript && data.aiData.transcript.length > 0) {
+            const sid = findSentenceByKeywords(data.aiData.transcript, aiHighlight);
+            if (sid !== null) setAiFocusSentenceId(sid);
+            setActiveTab('transcript');
+          } else {
+            setActiveTab('analysis');
+          }
 
           // F5: fetch count of calls from same caller
           if (data.caller) {
@@ -280,7 +312,8 @@ const CallDetail: React.FC<Props> = ({ callId, onBack, onSearchCaller }) => {
           <TranscriptView
             transcript={call.aiData?.transcript}
             emotions={call.aiData?.emotions?.sentences}
-            focusSentenceId={transcriptPanelFocusId}
+            focusSentenceId={aiFocusSentenceId ?? transcriptPanelFocusId}
+            aiHighlight={aiHighlight}
           />
         )}
         {activeTab === 'insights' && (
