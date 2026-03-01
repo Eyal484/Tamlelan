@@ -1,16 +1,21 @@
 import { useEffect, useRef } from 'react';
 import type { CallListItem } from '../types';
 
-export function useSSE(callbacks: {
-  onNewCall?: (call: CallListItem) => void;
-  onDeleteCall?: (data: { ivruniqueid: string }) => void;
-  onUpdateCall?: (data: { ivruniqueid: string; hasAnalysis?: boolean }) => void;
-}) {
+export function useSSE(
+  token: string,
+  callbacks: {
+    onNewCall?: (call: CallListItem) => void;
+    onDeleteCall?: (data: { ivruniqueid: string }) => void;
+    onUpdateCall?: (data: { ivruniqueid: string; hasAnalysis?: boolean }) => void;
+  },
+) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
 
   useEffect(() => {
-    const evtSource = new EventSource('/api/calls/stream');
+    if (!token) return; // wait until we have a token
+
+    const evtSource = new EventSource(`/api/calls/stream?token=${encodeURIComponent(token)}`);
 
     evtSource.addEventListener('new-call', (e) => {
       try {
@@ -46,5 +51,5 @@ export function useSSE(callbacks: {
     return () => {
       evtSource.close();
     };
-  }, []);
+  }, [token]); // re-connect when token changes (e.g. hourly refresh)
 }

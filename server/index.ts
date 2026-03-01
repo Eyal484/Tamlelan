@@ -32,6 +32,87 @@ app.use((req, _res, next) => {
 });
 
 // ============================================================
+// Firebase Auth Middleware
+// ============================================================
+
+const ALLOWED_DOMAIN = '@drushim.il';
+const ALLOWED_EMAILS_SERVER = ['eyalbch@gmail.com'];
+
+// In-memory token cache to avoid verifying on every request
+const tokenCache = new Map<string, { email: string; exp: number }>();
+
+function isEmailAllowed(email: string): boolean {
+  const lower = email.toLowerCase();
+  return lower.endsWith(ALLOWED_DOMAIN) || ALLOWED_EMAILS_SERVER.includes(lower);
+}
+
+async function verifyFirebaseToken(token: string): Promise<string | null> {
+  // Return cached result if still valid
+  const cached = tokenCache.get(token);
+  if (cached && cached.exp > Date.now()) return cached.email;
+
+  const apiKey = process.env.FIREBASE_API_KEY;
+  if (!apiKey) {
+    // No key configured — allow in dev so the server still works locally
+    console.warn('[Auth] FIREBASE_API_KEY not set — auth skipped');
+    return 'dev@drushim.il';
+  }
+
+  try {
+    const resp = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token }),
+      },
+    );
+    if (!resp.ok) return null;
+
+    const data = await resp.json() as { users?: { email?: string }[] };
+    const email = data.users?.[0]?.email;
+    if (!email) return null;
+
+    // Cache for 55 min (tokens last 1 hour)
+    tokenCache.set(token, { email, exp: Date.now() + 55 * 60 * 1000 });
+    return email;
+  } catch {
+    return null;
+  }
+}
+
+// Auth guard — applies to all /api/* routes except the webhook
+app.use(async (req, res, next) => {
+  // Only guard API routes
+  if (!req.path.startsWith('/api')) return next();
+
+  // Voicenter webhook has no auth header — always allow
+  if (req.path === '/api/webhook/voicenter') return next();
+
+  // SSE: EventSource can't set headers, so token comes as query param
+  let token: string;
+  if (req.path === '/api/calls/stream') {
+    token = (req.query.token as string) || '';
+  } else {
+    const authHeader = req.headers.authorization || '';
+    token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  }
+
+  if (!token) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const email = await verifyFirebaseToken(token);
+  if (!email || !isEmailAllowed(email)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+
+  next();
+});
+
+// ============================================================
 // SSE Endpoint
 // ============================================================
 

@@ -7,6 +7,7 @@ import { useSSE } from '../hooks/useSSE';
 interface Props {
   onSelectCall: (id: string, highlight?: string) => void;
   initialSearch?: string;
+  authToken: string;
 }
 
 type DirectionFilter = 'all' | 'incoming' | 'outgoing' | 'starred';
@@ -107,7 +108,7 @@ const SkeletonRow = () => (
   </div>
 );
 
-const CallList: React.FC<Props> = ({ onSelectCall, initialSearch }) => {
+const CallList: React.FC<Props> = ({ onSelectCall, initialSearch, authToken }) => {
   const [calls, setCalls] = useState<CallListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -201,7 +202,7 @@ const CallList: React.FC<Props> = ({ onSelectCall, initialSearch }) => {
   };
 
   // SSE real-time updates
-  useSSE({
+  useSSE(authToken, {
     onNewCall: useCallback((call: CallListItem) => {
       setCalls(prev => {
         if (prev.some(c => c.ivruniqueid === call.ivruniqueid)) {
