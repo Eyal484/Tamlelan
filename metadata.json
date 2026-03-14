@@ -1,7 +1,4 @@
 {
-  "name": "CallTranscribe Pro",
-  "description": "A professional tool for recording and transcribing calls. Features high-quality audio capture and advanced Gemini-powered transcription.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
+  "name": "Tamlelan",
+  "description": "Call management dashboard with Voicenter webhook integration. Displays call data, transcripts, AI insights, and emotion analysis."
 }
